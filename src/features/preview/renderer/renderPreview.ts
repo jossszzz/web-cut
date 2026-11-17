@@ -1,38 +1,55 @@
 import { getVisualClipsAt } from "@/core/project/queries";
-import type { Clip, Project } from "@/core/project/schema";
+import type { Clip, MediaAsset, Project } from "@/core/project/schema";
 import type { Microseconds } from "@/core/types/time";
 import { sansFont } from "@/lib/canvas";
 import { CLIP_COLORS } from "@/lib/constants/clipColors";
 
 /**
- * Renderizador de preview del Sprint 1.
+ * Renderizador de preview.
  *
- * Todavía no hay decodificación de medios: los clips de video e imagen se
- * dibujan como marcadores de posición con su transformación real (posición,
- * escala, rotación y opacidad). El texto sí se renderiza tal cual.
+ * - Imágenes y texto se dibujan tal cual.
+ * - Videos: todavía no hay decodificación por frame (Fase 4); se dibuja su
+ *   miniatura como fotograma de referencia, con una etiqueta que lo indica.
+ * - Clips sin medio (demostración) o con el medio eliminado: marcador de posición.
+ *
+ * Todo con la transformación real del clip (posición, escala, rotación, opacidad).
  */
 
 export interface PreviewRenderState {
   project: Project;
   time: Microseconds;
   selectedClipIds: ReadonlySet<string>;
+  assets: Readonly<Record<string, MediaAsset>>;
+  /** Devuelve la imagen decodificada del asset, o `null` si aún no está lista. */
+  getFrameSource: (asset: MediaAsset) => CanvasImageSource | null;
   /** Tamaño CSS del canvas. */
   width: number;
   height: number;
 }
 
 /** Caja del contenido de un clip en píxeles del proyecto, centrada en el origen. */
-function measureClip(ctx: CanvasRenderingContext2D, clip: Clip, project: Project): { w: number; h: number } {
+function measureClip(
+  ctx: CanvasRenderingContext2D,
+  clip: Clip,
+  project: Project,
+  asset: MediaAsset | undefined,
+): { w: number; h: number } {
   if (clip.type === "text" && clip.text) {
     ctx.font = `600 ${clip.text.fontSize}px ${sansFont()}`;
     const lines = clip.text.content.split("\n");
     const w = Math.max(...lines.map((line) => ctx.measureText(line).width), clip.text.fontSize * 0.5);
     return { w, h: lines.length * clip.text.fontSize * 1.2 };
   }
-  return { w: project.settings.width, h: project.settings.height };
+  const { width: W, height: H } = project.settings;
+  if (asset?.width && asset.height) {
+    // Ajuste "contain" al lienzo, como al importar en CapCut.
+    const fit = Math.min(W / asset.width, H / asset.height);
+    return { w: asset.width * fit, h: asset.height * fit };
+  }
+  return { w: W, h: H };
 }
 
-function drawPlaceholder(ctx: CanvasRenderingContext2D, clip: Clip, w: number, h: number): void {
+function drawPlaceholder(ctx: CanvasRenderingContext2D, clip: Clip, w: number, h: number, subtitle: string): void {
   const colors = CLIP_COLORS[clip.type];
   const gradient = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
   gradient.addColorStop(0, colors.fill);
@@ -62,7 +79,50 @@ function drawPlaceholder(ctx: CanvasRenderingContext2D, clip: Clip, w: number, h
   ctx.fillText(clip.name, 0, -base * 0.04);
   ctx.fillStyle = "rgba(255,255,255,0.6)";
   ctx.font = `${base * 0.045}px ${sansFont()}`;
-  ctx.fillText(`${colors.label} de prueba · sin medio`, 0, base * 0.07);
+  ctx.fillText(subtitle, 0, base * 0.07);
+}
+
+function drawBadge(ctx: CanvasRenderingContext2D, text: string, w: number, h: number): void {
+  const size = Math.max(14, Math.min(w, h) * 0.035);
+  ctx.font = `500 ${size}px ${sansFont()}`;
+  const padding = size * 0.6;
+  const textWidth = ctx.measureText(text).width;
+  const x = -w / 2 + size;
+  const y = h / 2 - size * 2.6;
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.beginPath();
+  ctx.roundRect(x, y, textWidth + padding * 2, size * 1.8, size * 0.4);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x + padding, y + size * 0.9);
+}
+
+function drawMediaClip(
+  ctx: CanvasRenderingContext2D,
+  clip: Clip,
+  w: number,
+  h: number,
+  state: PreviewRenderState,
+): void {
+  if (!clip.assetId) {
+    drawPlaceholder(ctx, clip, w, h, `${CLIP_COLORS[clip.type].label} de prueba · sin medio`);
+    return;
+  }
+  const asset = state.assets[clip.assetId];
+  if (!asset) {
+    drawPlaceholder(ctx, clip, w, h, "Medio no disponible");
+    return;
+  }
+  const source = state.getFrameSource(asset);
+  if (!source) {
+    ctx.fillStyle = "#0b0b0d";
+    ctx.fillRect(-w / 2, -h / 2, w, h);
+    return;
+  }
+  ctx.drawImage(source, -w / 2, -h / 2, w, h);
+  if (clip.type === "video") drawBadge(ctx, "Fotograma de referencia · reproducción en Fase 4", w, h);
 }
 
 function drawText(ctx: CanvasRenderingContext2D, clip: Clip): void {
@@ -100,7 +160,8 @@ export function renderPreview(ctx: CanvasRenderingContext2D, state: PreviewRende
 
   for (const { clip } of getVisualClipsAt(project, state.time)) {
     const { x, y, scaleX, scaleY, rotation, opacity } = clip.transform;
-    const { w, h } = measureClip(ctx, clip, project);
+    const asset = clip.assetId ? state.assets[clip.assetId] : undefined;
+    const { w, h } = measureClip(ctx, clip, project, asset);
 
     ctx.save();
     ctx.translate(width / 2 + x * scale, height / 2 + y * scale);
@@ -108,7 +169,7 @@ export function renderPreview(ctx: CanvasRenderingContext2D, state: PreviewRende
     ctx.scale(scale * scaleX, scale * scaleY);
     ctx.globalAlpha = opacity;
     if (clip.type === "text") drawText(ctx, clip);
-    else drawPlaceholder(ctx, clip, w, h);
+    else drawMediaClip(ctx, clip, w, h, state);
     const matrix = ctx.getTransform();
     ctx.restore();
 

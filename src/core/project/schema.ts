@@ -83,15 +83,27 @@ export const projectSchema = z.object({
   updatedAt: z.number(),
 });
 
+export const mediaKindSchema = z.enum(["video", "audio", "image"]);
+
+/**
+ * Metadatos de un archivo importado. El binario vive aparte (IndexedDB) y se
+ * referencia por `blobId`; los proyectos referencian el asset por `id`.
+ */
 export const mediaAssetSchema = z.object({
   id: z.string().min(1),
+  projectId: z.string().min(1),
+  kind: mediaKindSchema,
   name: z.string(),
   mimeType: z.string(),
   size: z.number().int().nonnegative(),
+  /** Microsegundos; ausente en imágenes. */
   duration: microseconds.optional(),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
+  hasAudio: z.boolean(),
   blobId: z.string().min(1),
+  thumbnailBlobId: z.string().min(1).optional(),
+  createdAt: z.number(),
 });
 
 export type Transform = z.infer<typeof transformSchema>;
@@ -103,4 +115,5 @@ export type TrackType = z.infer<typeof trackTypeSchema>;
 export type Track = z.infer<typeof trackSchema>;
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 export type Project = z.infer<typeof projectSchema>;
+export type MediaKind = z.infer<typeof mediaKindSchema>;
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;

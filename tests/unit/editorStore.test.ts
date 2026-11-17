@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { removeClipsCommand, updateClipCommand } from "@/core/commands/projectCommands";
+import { createEmptyProject } from "@/core/project/factory";
 import { findClip } from "@/core/project/queries";
 import { secondsToUs } from "@/core/types/time";
 import { selectActiveProject, useEditorStore } from "@/features/editor/store/editorStore";
@@ -90,5 +91,29 @@ describe("editorStore", () => {
     useEditorStore.getState().setPlayhead(secondsToUs(11));
     useEditorStore.getState().setPlaying(true);
     expect(useEditorStore.getState()).toMatchObject({ isPlaying: true, playhead: 0 });
+  });
+
+  it("hidrata proyectos guardados sin pisar versiones más recientes en memoria", () => {
+    const store = useEditorStore.getState();
+    const stored = createEmptyProject({ name: "Guardado", now: 10 });
+    const local = { ...stored, name: "Editado", updatedAt: 20 };
+    useEditorStore.setState({ projects: { [stored.id]: local } });
+
+    const other = createEmptyProject({ name: "Otro", now: 5 });
+    store.hydrateProjects([{ ...stored }, other]);
+    const { projects, projectsLoaded } = useEditorStore.getState();
+    expect(projects[stored.id].name).toBe("Editado");
+    expect(projects[other.id].name).toBe("Otro");
+    expect(projectsLoaded).toBe(true);
+
+    store.hydrateProjects([{ ...stored, name: "Más nuevo", updatedAt: 30 }]);
+    expect(useEditorStore.getState().projects[stored.id].name).toBe("Más nuevo");
+  });
+
+  it("al eliminar el proyecto activo lo cierra", () => {
+    const project = setupDemo();
+    useEditorStore.getState().removeProject(project.id);
+    expect(useEditorStore.getState().activeProjectId).toBeNull();
+    expect(useEditorStore.getState().projects[project.id]).toBeUndefined();
   });
 });

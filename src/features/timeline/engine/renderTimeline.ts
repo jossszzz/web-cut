@@ -1,5 +1,5 @@
 import { getProjectDuration } from "@/core/project/queries";
-import type { Project } from "@/core/project/schema";
+import type { Clip, MediaAsset, Project } from "@/core/project/schema";
 import {
   getClipRect,
   getRulerTickSteps,
@@ -16,6 +16,8 @@ export interface TimelineRenderState {
   project: Project;
   selectedTrackId: string | null;
   selectedClipIds: ReadonlySet<string>;
+  assets: Readonly<Record<string, MediaAsset>>;
+  getFrameSource: (asset: MediaAsset) => CanvasImageSource | null;
   playhead: number;
   viewport: TimelineViewport;
   layout: TimelineLayout;
@@ -94,6 +96,34 @@ function drawHatch(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.restore();
 }
 
+/** Miniaturas repetidas a lo largo del clip (tira de fotogramas). */
+function drawThumbnails(
+  ctx: CanvasRenderingContext2D,
+  clip: Clip,
+  state: TimelineRenderState,
+  box: { x: number; y: number; w: number; h: number },
+): void {
+  const asset = clip.assetId ? state.assets[clip.assetId] : undefined;
+  if (!asset || asset.kind === "audio") return;
+  const source = state.getFrameSource(asset);
+  if (!source || !asset.width || !asset.height) return;
+  const tileW = Math.max(16, (box.h * asset.width) / asset.height);
+  ctx.save();
+  roundRectPath(ctx, box.x, box.y, box.w, box.h, 6);
+  ctx.clip();
+  // Saltar las teselas que quedan a la izquierda del área visible.
+  const first = box.x + Math.max(0, Math.floor(-box.x / tileW)) * tileW;
+  const last = Math.min(box.x + box.w, state.width);
+  for (let x = first; x < last; x += tileW) ctx.drawImage(source, x, box.y, tileW, box.h);
+  // Degradado para que el nombre siga siendo legible.
+  const gradient = ctx.createLinearGradient(0, box.y, 0, box.y + box.h);
+  gradient.addColorStop(0, "rgba(0,0,0,0.65)");
+  gradient.addColorStop(0.6, "rgba(0,0,0,0.1)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(box.x, box.y, box.w, box.h);
+  ctx.restore();
+}
+
 function drawTracks(ctx: CanvasRenderingContext2D, state: TimelineRenderState): void {
   const { project, viewport, layout, width, selectedTrackId, selectedClipIds } = state;
 
@@ -115,6 +145,8 @@ function drawTracks(ctx: CanvasRenderingContext2D, state: TimelineRenderState): 
       roundRectPath(ctx, inset.x, inset.y, inset.w, inset.h, 6);
       ctx.fillStyle = colors.fill;
       ctx.fill();
+      drawThumbnails(ctx, clip, state, inset);
+      roundRectPath(ctx, inset.x, inset.y, inset.w, inset.h, 6);
       ctx.lineWidth = selected ? 2 : 1;
       ctx.strokeStyle = selected ? COLORS.selection : colors.stroke;
       ctx.stroke();
@@ -132,7 +164,9 @@ function drawTracks(ctx: CanvasRenderingContext2D, state: TimelineRenderState): 
       ctx.fillText(clip.name, Math.max(inset.x + 8, 8), inset.y + 6);
       ctx.fillStyle = "rgba(255,255,255,0.65)";
       ctx.font = `10px ${sansFont()}`;
-      const subtitle = clip.type === "text" ? (clip.text?.content ?? "") : colors.label;
+      const missing = clip.assetId !== undefined && !state.assets[clip.assetId];
+      const subtitle =
+        clip.type === "text" ? (clip.text?.content ?? "") : missing ? "Medio no disponible" : colors.label;
       ctx.fillText(subtitle, Math.max(inset.x + 8, 8), inset.y + 23);
       ctx.restore();
       ctx.globalAlpha = 1;

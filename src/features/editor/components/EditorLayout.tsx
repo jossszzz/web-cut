@@ -1,6 +1,7 @@
 "use client";
 
 import { usePlaybackClock } from "@/features/preview/playback/usePlaybackClock";
+import { useAutosave } from "@/features/projects/persistence/projectPersistence";
 
 import { useEditorShortcuts } from "../hooks/useEditorShortcuts";
 import { EditorHeader } from "./EditorHeader";
@@ -17,6 +18,7 @@ import { TimelinePanel } from "./TimelinePanel";
  */
 export function EditorLayout() {
   usePlaybackClock();
+  useAutosave();
   useEditorShortcuts();
 
   return (

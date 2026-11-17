@@ -7,7 +7,7 @@ import { useEditorStore, type EditorTool } from "../store/editorStore";
 import { EDITOR_TOOLS } from "./EditorSidebar";
 
 const COMING_SOON: Partial<Record<EditorTool, string>> = {
-  audio: "La biblioteca de audio y el control de volumen llegan en las Fases 2 y 5.",
+  audio: "Importa música y sonidos desde Medios. La mezcla y el control de volumen llegan en la Fase 5.",
   effects: "Los efectos visuales llegan en la Fase 5.",
   transitions: "Las transiciones básicas llegan en la Fase 5.",
 };

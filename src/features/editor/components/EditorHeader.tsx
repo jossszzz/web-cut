@@ -1,10 +1,9 @@
 "use client";
 
-import { Clapperboard, Download, Redo2, Undo2 } from "lucide-react";
+import { AlertCircle, Check, Clapperboard, Download, Loader2, Redo2, Undo2 } from "lucide-react";
 import Link from "next/link";
 
 import { IconButton } from "@/components/shared/IconButton";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { canRedo, canUndo } from "@/core/commands/history";
@@ -16,6 +15,8 @@ export function EditorHeader() {
   const history = useEditorStore((state) => state.history);
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
+  const saveStatus = useEditorStore((state) => state.saveStatus);
+  const saveError = useEditorStore((state) => state.saveError);
   if (!project) return null;
 
   const isMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform);
@@ -38,9 +39,23 @@ export function EditorHeader() {
         <h1 className="truncate text-sm font-medium" title={project.name}>
           {project.name}
         </h1>
-        <Badge variant="outline" className="hidden text-muted-foreground lg:inline-flex">
-          Solo en memoria
-        </Badge>
+        <span role="status" className="flex items-center gap-1 text-xs text-muted-foreground">
+          {saveStatus === "saving" && (
+            <>
+              <Loader2 className="size-3 animate-spin" aria-hidden /> Guardando…
+            </>
+          )}
+          {saveStatus === "saved" && (
+            <>
+              <Check className="size-3" aria-hidden /> Guardado en este dispositivo
+            </>
+          )}
+          {saveStatus === "error" && (
+            <span className="flex items-center gap-1 text-destructive" title={saveError ?? undefined}>
+              <AlertCircle className="size-3" aria-hidden /> {saveError ?? "Error al guardar"}
+            </span>
+          )}
+        </span>
       </div>
 
       <div className="ml-auto flex items-center gap-1">

@@ -14,6 +14,7 @@ import type { Microseconds } from "@/core/types/time";
 
 export type ProjectTemplate = "empty" | "demo";
 export type EditorTool = "media" | "text" | "audio" | "effects" | "transitions";
+export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export interface Selection {
   trackId: string | null;
@@ -26,11 +27,16 @@ const EMPTY_SELECTION: Selection = { trackId: null, clipIds: [] };
  * Estado del editor. Solo guarda metadatos serializables: nunca `File`,
  * `Blob` ni referencias multimedia (esos irán a IndexedDB en la Fase 2).
  *
- * Sprint 1: los proyectos viven solo en memoria; se pierden al recargar.
+ * La persistencia (IndexedDB) se gestiona fuera del store, en
+ * `features/projects/persistence`, a través de los repositorios.
  */
 export interface EditorState {
   projects: Record<string, Project>;
+  /** `true` cuando ya se cargaron los proyectos guardados. */
+  projectsLoaded: boolean;
   activeProjectId: string | null;
+  saveStatus: SaveStatus;
+  saveError: string | null;
   history: historyOps.History;
   selection: Selection;
   playhead: Microseconds;
@@ -40,6 +46,10 @@ export interface EditorState {
 
   createProject(input: { name: string; template: ProjectTemplate }): Project;
   openProject(projectId: string): boolean;
+  /** Añade proyectos cargados del almacenamiento sin pisar versiones más recientes en memoria. */
+  hydrateProjects(projects: Project[], options?: { complete?: boolean }): void;
+  removeProject(projectId: string): void;
+  setSaveStatus(status: SaveStatus, error?: string | null): void;
 
   execute(command: Command | null): boolean;
   undo(): void;
@@ -89,7 +99,10 @@ export const useEditorStore = create<EditorState>()((set, get) => {
 
   return {
     projects: {},
+    projectsLoaded: false,
     activeProjectId: null,
+    saveStatus: "idle",
+    saveError: null,
     history: historyOps.createHistory(),
     selection: EMPTY_SELECTION,
     playhead: 0,
@@ -104,6 +117,27 @@ export const useEditorStore = create<EditorState>()((set, get) => {
       return project;
     },
 
+    hydrateProjects: (loaded, { complete = true } = {}) =>
+      set((state) => {
+        const projects = { ...state.projects };
+        for (const project of loaded) {
+          const current = projects[project.id];
+          if (!current || current.updatedAt < project.updatedAt) projects[project.id] = project;
+        }
+        return { projects, projectsLoaded: state.projectsLoaded || complete };
+      }),
+
+    removeProject: (projectId) =>
+      set((state) => {
+        const projects = { ...state.projects };
+        delete projects[projectId];
+        return state.activeProjectId === projectId
+          ? { projects, activeProjectId: null, history: historyOps.createHistory(), selection: EMPTY_SELECTION }
+          : { projects };
+      }),
+
+    setSaveStatus: (saveStatus, saveError = null) => set({ saveStatus, saveError }),
+
     openProject: (projectId) => {
       if (!get().projects[projectId]) return false;
       if (get().activeProjectId === projectId) return true;
@@ -114,6 +148,8 @@ export const useEditorStore = create<EditorState>()((set, get) => {
         playhead: 0,
         isPlaying: false,
         viewport: DEFAULT_VIEWPORT,
+        saveStatus: "idle",
+        saveError: null,
       });
       return true;
     },

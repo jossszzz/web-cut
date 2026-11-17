@@ -5,7 +5,9 @@ import { useEffect, useMemo, useRef } from "react";
 import { prepareCanvas } from "@/lib/canvas";
 import { useElementSize } from "@/lib/hooks/useElementSize";
 import { selectActiveProject, useEditorStore } from "@/features/editor/store/editorStore";
+import { useMediaStore } from "@/features/media/store/mediaStore";
 
+import { getFrameSource, useFrameSourcesVersion } from "../renderer/frameSources";
 import { renderPreview } from "../renderer/renderPreview";
 
 const PADDING = 24;
@@ -16,6 +18,8 @@ export function PreviewCanvas() {
   const playhead = useEditorStore((state) => state.playhead);
   const clipIds = useEditorStore((state) => state.selection.clipIds);
   const selected = useMemo(() => new Set(clipIds), [clipIds]);
+  const assets = useMediaStore((state) => state.assets);
+  const framesVersion = useFrameSourcesVersion();
 
   const [containerRef, container] = useElementSize<HTMLDivElement>();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -30,8 +34,10 @@ export function PreviewCanvas() {
     const canvas = canvasRef.current;
     if (!canvas || !project || width <= 0 || height <= 0) return;
     const ctx = prepareCanvas(canvas, width, height);
-    if (ctx) renderPreview(ctx, { project, time: playhead, selectedClipIds: selected, width, height });
-  }, [project, playhead, selected, width, height]);
+    if (ctx) {
+      renderPreview(ctx, { project, time: playhead, selectedClipIds: selected, assets, getFrameSource, width, height });
+    }
+  }, [project, playhead, selected, assets, framesVersion, width, height]);
 
   return (
     <div ref={containerRef} className="flex min-h-0 flex-1 items-center justify-center bg-canvas">

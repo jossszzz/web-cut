@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, type DragEvent, type PointerEvent } from "react";
 
 import { getProjectDuration } from "@/core/project/queries";
 import type { Project } from "@/core/project/schema";
@@ -12,6 +12,9 @@ import {
 } from "@/core/timeline/geometry";
 import { usToSeconds } from "@/core/types/time";
 import { selectActiveProject, useEditorStore } from "@/features/editor/store/editorStore";
+import { addAssetToTimeline, ASSET_DRAG_TYPE } from "@/features/media/actions";
+import { useMediaStore } from "@/features/media/store/mediaStore";
+import { getFrameSource, useFrameSourcesVersion } from "@/features/preview/renderer/frameSources";
 import { prepareCanvas } from "@/lib/canvas";
 import { useElementSize } from "@/lib/hooks/useElementSize";
 
@@ -31,6 +34,8 @@ export function TimelineCanvas() {
   const playhead = useEditorStore((state) => state.playhead);
   const viewport = useEditorStore((state) => state.viewport);
   const selectedClipIds = useMemo(() => new Set(selection.clipIds), [selection.clipIds]);
+  const assets = useMediaStore((state) => state.assets);
+  const framesVersion = useFrameSourcesVersion();
 
   const [containerRef, size] = useElementSize<HTMLDivElement>();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -47,13 +52,15 @@ export function TimelineCanvas() {
       project,
       selectedTrackId: selection.trackId,
       selectedClipIds,
+      assets,
+      getFrameSource,
       playhead,
       viewport,
       layout,
       width: size.width,
       height,
     });
-  }, [project, selection.trackId, selectedClipIds, playhead, viewport, size.width, height]);
+  }, [project, selection.trackId, selectedClipIds, assets, framesVersion, playhead, viewport, size.width, height]);
 
   // Rueda: desplazamiento horizontal y zoom con ⌘/Ctrl. Necesita listener no pasivo.
   useEffect(() => {
@@ -123,6 +130,22 @@ export function TimelineCanvas() {
     event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
+  const isAssetDrag = (event: DragEvent) => event.dataTransfer.types.includes(ASSET_DRAG_TYPE);
+
+  const onDrop = (event: DragEvent<HTMLCanvasElement>) => {
+    if (!isAssetDrag(event)) return;
+    event.preventDefault();
+    const asset = useMediaStore.getState().assets[event.dataTransfer.getData(ASSET_DRAG_TYPE)];
+    if (!asset) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const hit = hitTest(project, x, event.clientY - rect.top, viewport, layout);
+    addAssetToTimeline(asset, {
+      trackId: hit.kind === "clip" || hit.kind === "track" ? hit.trackId : undefined,
+      at: xToTime(x, viewport),
+    });
+  };
+
   return (
     <div ref={containerRef} className="relative min-w-0 flex-1">
       <canvas
@@ -135,6 +158,12 @@ export function TimelineCanvas() {
         onPointerMove={onPointerMove}
         onPointerUp={endScrub}
         onPointerCancel={endScrub}
+        onDragOver={(event) => {
+          if (!isAssetDrag(event)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+        }}
+        onDrop={onDrop}
       />
     </div>
   );
