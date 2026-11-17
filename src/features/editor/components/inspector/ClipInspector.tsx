@@ -5,10 +5,13 @@ import { Lock, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { updateClipCommand, type ClipPatch } from "@/core/commands/projectCommands";
+import { moveClipsCommand, setClipTimingCommand } from "@/core/commands/timelineCommands";
 import { IDENTITY_TRANSFORM } from "@/core/project/factory";
 import type { ClipLocation } from "@/core/project/queries";
 import type { Project, Transform } from "@/core/project/schema";
-import { formatTimecode } from "@/core/types/time";
+import { resolveMove, resolveTrim } from "@/core/timeline/edit";
+import { formatTimecode, frameToUs, secondsToUs, usToSeconds } from "@/core/types/time";
+import { useMediaStore } from "@/features/media/store/mediaStore";
 import { CLIP_COLORS } from "@/lib/constants/clipColors";
 
 import { useEditorStore } from "../../store/editorStore";
@@ -31,6 +34,21 @@ export function ClipInspector({ project, location }: { project: Project; locatio
     update({ transform: value }, label, field ? `${clip.id}:${field}` : undefined);
 
   const isVisual = clip.type !== "audio";
+  const sourceDuration = useMediaStore((state) => (clip.assetId ? state.assets[clip.assetId]?.duration : undefined));
+
+  /** Mover a un inicio exacto: mismas reglas que al arrastrar (sin solapes). */
+  const setStart = (seconds: number) => {
+    const result = resolveMove(project, { clipIds: [clip.id], deltaTime: secondsToUs(seconds) - clip.start, trackOffset: 0 });
+    if (result) execute(moveClipsCommand(project, result.moves));
+  };
+  /** Cambiar la duración: equivale a recortar el borde final. */
+  const setDuration = (seconds: number) => {
+    const result = resolveTrim(project, clip.id, "end", clip.start + secondsToUs(seconds), {
+      sourceDuration,
+      minDuration: frameToUs(1, fps),
+    });
+    if (result) execute(setClipTimingCommand(project, clip.id, result));
+  };
 
   return (
     <fieldset disabled={track.locked} className="min-w-0">
@@ -47,10 +65,32 @@ export function ClipInspector({ project, location }: { project: Project; locatio
           </p>
         )}
         <TextField label="Nombre" value={clip.name} onCommit={(name) => update({ name }, "Renombrar clip")} />
+        <div className="grid grid-cols-2 gap-3">
+          <NumberField
+            label="Inicio"
+            value={usToSeconds(clip.start)}
+            min={0}
+            step={0.1}
+            precision={2}
+            suffix="s"
+            onCommit={setStart}
+          />
+          <NumberField
+            label="Duración"
+            value={usToSeconds(clip.duration)}
+            min={0}
+            step={0.1}
+            precision={2}
+            suffix="s"
+            onCommit={setDuration}
+          />
+        </div>
         <div className="flex flex-col gap-1.5">
-          <ReadOnlyField label="Inicio" value={formatTimecode(clip.start, fps)} />
-          <ReadOnlyField label="Duración" value={formatTimecode(clip.duration, fps)} />
+          <ReadOnlyField label="Timecode" value={`${formatTimecode(clip.start, fps)} – ${formatTimecode(clip.start + clip.duration, fps)}`} />
           <ReadOnlyField label="Inicio en fuente" value={formatTimecode(clip.sourceStart, fps)} />
+          {sourceDuration !== undefined && (
+            <ReadOnlyField label="Duración de la fuente" value={formatTimecode(sourceDuration, fps)} />
+          )}
         </div>
       </InspectorSection>
 

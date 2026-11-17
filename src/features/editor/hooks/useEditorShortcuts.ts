@@ -20,7 +20,8 @@ function isTypingTarget(target: EventTarget | null): boolean {
 /**
  * Atajos globales del editor:
  * Espacio reproducir/pausar · ⌘/Ctrl+Z deshacer · ⇧⌘/Ctrl+Z o Ctrl+Y rehacer ·
- * Supr/Retroceso eliminar · Esc deseleccionar · ←/→ frame (⇧ = 1 s).
+ * Supr/Retroceso eliminar · Esc deseleccionar · ←/→ frame (⇧ = 1 s) ·
+ * ⌘/Ctrl+A seleccionar todo · N imán · ⇧Z ajustar el zoom al proyecto.
  */
 export function useEditorShortcuts(): void {
   useEffect(() => {
@@ -36,6 +37,11 @@ export function useEditorShortcuts(): void {
         event.preventDefault();
         if (event.shiftKey) state.redo();
         else state.undo();
+        return;
+      }
+      if (mod && key === "a") {
+        event.preventDefault();
+        state.setSelection(project.tracks.flatMap((t) => t.clips.map((c) => c.id)));
         return;
       }
       if (mod && key === "y") {
@@ -61,6 +67,13 @@ export function useEditorShortcuts(): void {
           break;
         case "Escape":
           state.clearSelection();
+          break;
+        case "n":
+        case "N":
+          state.toggleSnapping();
+          break;
+        case "Z":
+          if (event.shiftKey) state.zoomToFit();
           break;
         case "ArrowLeft":
         case "ArrowRight": {

@@ -6,11 +6,12 @@ import { createDemoProject, createEmptyProject } from "@/core/project/factory";
 import { findClip, findTrack, getProjectDuration } from "@/core/project/queries";
 import type { Project } from "@/core/project/schema";
 import {
+  clampZoom,
   DEFAULT_VIEWPORT,
   zoomAround,
   type TimelineViewport,
 } from "@/core/timeline/geometry";
-import type { Microseconds } from "@/core/types/time";
+import { usToSeconds, type Microseconds } from "@/core/types/time";
 
 export type ProjectTemplate = "empty" | "demo";
 export type EditorTool = "media" | "text" | "audio" | "effects" | "transitions";
@@ -42,6 +43,9 @@ export interface EditorState {
   playhead: Microseconds;
   isPlaying: boolean;
   viewport: TimelineViewport;
+  /** Ancho visible del área de clips (lo informa el canvas). */
+  timelineWidth: number;
+  snapping: boolean;
   activeTool: EditorTool;
 
   createProject(input: { name: string; template: ProjectTemplate }): Project;
@@ -59,6 +63,7 @@ export interface EditorState {
   selectTrack(trackId: string | null): void;
   selectClip(clipId: string, options?: { additive?: boolean }): void;
   clearSelection(): void;
+  setSelection(clipIds: readonly string[]): void;
 
   setPlayhead(time: Microseconds): void;
   setPlaying(playing: boolean): void;
@@ -66,6 +71,9 @@ export interface EditorState {
 
   setViewport(viewport: TimelineViewport): void;
   zoomBy(factor: number, anchorX?: number): void;
+  zoomToFit(): void;
+  setTimelineWidth(width: number): void;
+  toggleSnapping(): void;
   setActiveTool(tool: EditorTool): void;
 }
 
@@ -108,6 +116,8 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     playhead: 0,
     isPlaying: false,
     viewport: DEFAULT_VIEWPORT,
+    timelineWidth: 0,
+    snapping: true,
     activeTool: "media",
 
     createProject: ({ name, template }) => {
@@ -197,6 +207,15 @@ export const useEditorStore = create<EditorState>()((set, get) => {
 
     clearSelection: () => set({ selection: EMPTY_SELECTION }),
 
+    setSelection: (clipIds) => {
+      const project = activeProject();
+      if (!project) return;
+      const valid = clipIds.filter((id) => findClip(project, id) !== null);
+      const last = valid.at(-1);
+      const trackId = last ? (findClip(project, last)?.track.id ?? null) : get().selection.trackId;
+      set({ selection: { trackId, clipIds: valid } });
+    },
+
     setPlayhead: (time) => {
       const project = activeProject();
       const max = project ? getProjectDuration(project) : 0;
@@ -219,6 +238,19 @@ export const useEditorStore = create<EditorState>()((set, get) => {
 
     zoomBy: (factor, anchorX = 0) =>
       set((state) => ({ viewport: zoomAround(state.viewport, factor, anchorX) })),
+
+    zoomToFit: () => {
+      const project = activeProject();
+      const { timelineWidth } = get();
+      if (!project || timelineWidth <= 0) return;
+      const seconds = usToSeconds(getProjectDuration(project));
+      const pxPerSecond = seconds > 0 ? clampZoom((timelineWidth - 48) / seconds) : DEFAULT_VIEWPORT.pxPerSecond;
+      set({ viewport: { pxPerSecond, scrollX: 0 } });
+    },
+
+    setTimelineWidth: (timelineWidth) => set({ timelineWidth }),
+
+    toggleSnapping: () => set((state) => ({ snapping: !state.snapping })),
 
     setActiveTool: (tool) => set({ activeTool: tool }),
   };

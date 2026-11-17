@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type DragEvent, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, type DragEvent } from "react";
 
 import { getProjectDuration } from "@/core/project/queries";
 import type { Project } from "@/core/project/schema";
@@ -19,6 +19,7 @@ import { prepareCanvas } from "@/lib/canvas";
 import { useElementSize } from "@/lib/hooks/useElementSize";
 
 import { renderTimeline } from "../engine/renderTimeline";
+import { useTimelineInteractions } from "./useTimelineInteractions";
 
 const layout = DEFAULT_TIMELINE_LAYOUT;
 
@@ -27,9 +28,12 @@ function maxScrollX(project: Project, pxPerSecond: number, width: number): numbe
   return Math.max(0, contentWidth - width);
 }
 
-/** Área de pistas renderizada con Canvas 2D. Gestiona selección, scrubbing, scroll y zoom. */
+/** Área de pistas renderizada con Canvas 2D: dibujo, scroll/zoom con la rueda y soltar medios. */
 export function TimelineCanvas() {
-  const project = useEditorStore(selectActiveProject);
+  const storeProject = useEditorStore(selectActiveProject);
+  const { preview, handlers } = useTimelineInteractions();
+  // Durante un gesto se dibuja la vista previa en lugar del proyecto guardado.
+  const project = preview.project ?? storeProject;
   const selection = useEditorStore((state) => state.selection);
   const playhead = useEditorStore((state) => state.playhead);
   const viewport = useEditorStore((state) => state.viewport);
@@ -39,7 +43,11 @@ export function TimelineCanvas() {
 
   const [containerRef, size] = useElementSize<HTMLDivElement>();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const scrubbing = useRef(false);
+  const setTimelineWidth = useEditorStore((state) => state.setTimelineWidth);
+
+  useEffect(() => {
+    setTimelineWidth(size.width);
+  }, [size.width, setTimelineWidth]);
 
   const height = project ? getContentHeight(project.tracks.length, layout) : 0;
 
@@ -59,8 +67,22 @@ export function TimelineCanvas() {
       layout,
       width: size.width,
       height,
+      snapTime: preview.snapTime,
+      marquee: preview.marquee,
     });
-  }, [project, selection.trackId, selectedClipIds, assets, framesVersion, playhead, viewport, size.width, height]);
+  }, [
+    project,
+    selection.trackId,
+    selectedClipIds,
+    assets,
+    framesVersion,
+    playhead,
+    viewport,
+    size.width,
+    height,
+    preview.snapTime,
+    preview.marquee,
+  ]);
 
   // Rueda: desplazamiento horizontal y zoom con ⌘/Ctrl. Necesita listener no pasivo.
   useEffect(() => {
@@ -89,47 +111,6 @@ export function TimelineCanvas() {
 
   if (!project) return null;
 
-  const localPoint = (event: PointerEvent<HTMLCanvasElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
-  };
-
-  const onPointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (event.button !== 0) return;
-    const { x, y } = localPoint(event);
-    const state = useEditorStore.getState();
-    const hit = hitTest(project, x, y, viewport, layout);
-    switch (hit.kind) {
-      case "ruler":
-        scrubbing.current = true;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        state.setPlaying(false);
-        state.setPlayhead(xToTime(x, viewport));
-        break;
-      case "clip":
-        state.selectClip(hit.clipId, { additive: event.shiftKey || event.metaKey || event.ctrlKey });
-        break;
-      case "track":
-        state.selectTrack(hit.trackId);
-        break;
-      case "empty":
-        state.clearSelection();
-        break;
-    }
-  };
-
-  const onPointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (!scrubbing.current) return;
-    const { x } = localPoint(event);
-    useEditorStore.getState().setPlayhead(xToTime(x, useEditorStore.getState().viewport));
-  };
-
-  const endScrub = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (!scrubbing.current) return;
-    scrubbing.current = false;
-    event.currentTarget.releasePointerCapture(event.pointerId);
-  };
-
   const isAssetDrag = (event: DragEvent) => event.dataTransfer.types.includes(ASSET_DRAG_TYPE);
 
   const onDrop = (event: DragEvent<HTMLCanvasElement>) => {
@@ -154,10 +135,7 @@ export function TimelineCanvas() {
         aria-hidden
         style={{ width: "100%", height }}
         className="block cursor-default touch-none"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endScrub}
-        onPointerCancel={endScrub}
+        {...handlers}
         onDragOver={(event) => {
           if (!isAssetDrag(event)) return;
           event.preventDefault();

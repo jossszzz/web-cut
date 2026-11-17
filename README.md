@@ -3,8 +3,8 @@
 Editor de video web, **local-first** y **browser-based**. La especificación completa está en
 [`docs/arquitectura-roadmap.md`](docs/arquitectura-roadmap.md).
 
-> Estado: **Fase 2** completada (importación y almacenamiento local). Todavía no hay reproducción
-> real de video (Fase 4) ni exportación (Fase 6).
+> Estado: **Fase 3** completada (timeline multipista). Todavía no hay reproducción real de video
+> (Fase 4) ni exportación (Fase 6).
 
 ## Requisitos
 
@@ -24,6 +24,23 @@ pnpm test             # pruebas unitarias (Vitest)
 pnpm exec playwright install chromium   # solo la primera vez
 pnpm test:e2e         # pruebas E2E (Playwright, compila y arranca la app)
 ```
+
+## Fase 3: timeline multipista
+
+- **Mover clips** arrastrando, también entre pistas compatibles (video ↔ video, imágenes en video o
+  superposición, texto en superposición, audio en audio). Con varios seleccionados se mueven juntos.
+- **Sin solapes:** con un clip, si el destino está ocupado se coloca en el hueco libre más cercano;
+  con varios, un destino no válido mantiene la última posición válida.
+- **Recortar** arrastrando los bordes. Recortar el inicio de un video/audio desplaza su punto de
+  entrada en la fuente; nunca se puede extender más allá del material del archivo.
+- **Imán** (*snapping*) al inicio del proyecto, al playhead y a los bordes de otros clips, con guía
+  visual. Botón o tecla **N**; mantener **Alt** lo ignora durante un arrastre.
+- **Selección por rectángulo** arrastrando sobre zonas vacías (⇧ para añadir), ⌘/Ctrl+A para todo.
+- **Pistas:** añadir (video, superposición, audio), eliminar (con sus clips) y reordenar arrastrando
+  el asa o con teclado (espacio, flechas, espacio).
+- Inicio y duración editables con valores exactos en el inspector (mismas reglas que al arrastrar).
+- Zoom ajustado al proyecto (⇧Z), desplazamiento automático al arrastrar cerca de los bordes y
+  **Esc** para cancelar un gesto. Cada gesto es un único paso de deshacer.
 
 ## Fase 2: importación y almacenamiento
 
@@ -66,7 +83,7 @@ src/
 │   ├── types/time.ts        Tiempo en microsegundos enteros
 │   ├── project/             Esquemas Zod, fábricas y consultas
 │   ├── commands/            Comandos puros + historial undo/redo
-│   ├── timeline/            Geometría (tiempo ↔ px, hit testing, zoom)
+│   ├── timeline/            Geometría, reglas de edición (mover/recortar) y snapping
 │   ├── media/               Validación de archivos y colocación de clips
 │   └── ports/               Contratos: ProjectRepository, AssetStorage, MediaAssetRepository
 ├── infrastructure/      Implementaciones locales (Dexie/IndexedDB, cuota de almacenamiento)

@@ -46,7 +46,7 @@ test("añade medios al timeline y todo persiste al recargar", async ({ page }) =
   await page.getByRole("button", { name: "Añadir clip.webm al timeline" }).click();
   const inspector = page.getByRole("complementary", { name: "Inspector" });
   await expect(inspector.getByLabel("Nombre")).toHaveValue("clip");
-  await expect(inspector.getByText("00:00:02:00")).toBeVisible(); // Duración real del archivo.
+  await expect(inspector.getByLabel("Duración", { exact: true })).toHaveValue("2"); // Duración real del archivo.
 
   // Arrastrar el audio desde la biblioteca a la pista de audio.
   const timeline = page.getByTestId("timeline-canvas");

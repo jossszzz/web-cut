@@ -72,9 +72,12 @@ export function getClipRect(
   };
 }
 
+/** Ancho de la zona sensible para recortar en cada borde de un clip. */
+export const TRIM_HANDLE_PX = 6;
+
 export type TimelineHit =
   | { kind: "ruler" }
-  | { kind: "clip"; trackId: string; clipId: string }
+  | { kind: "clip"; trackId: string; clipId: string; edge: "start" | "end" | null }
   | { kind: "track"; trackId: string }
   | { kind: "empty" };
 
@@ -97,7 +100,11 @@ export function hitTest(
   for (let i = track.clips.length - 1; i >= 0; i--) {
     const rect = getClipRect(track.clips[i], trackIndex, viewport, layout);
     if (x >= rect.x && x < rect.x + rect.width) {
-      return { kind: "clip", trackId: track.id, clipId: track.clips[i].id };
+      // Los bordes solo son sensibles si el clip es lo bastante ancho para moverlo también.
+      const handles = rect.width >= TRIM_HANDLE_PX * 3;
+      const edge =
+        handles && x < rect.x + TRIM_HANDLE_PX ? "start" : handles && x >= rect.x + rect.width - TRIM_HANDLE_PX ? "end" : null;
+      return { kind: "clip", trackId: track.id, clipId: track.clips[i].id, edge };
     }
   }
   return { kind: "track", trackId: track.id };
@@ -137,4 +144,37 @@ export function zoomAround(
   const anchorSeconds = (anchorX + viewport.scrollX) / viewport.pxPerSecond;
   const scrollX = Math.max(0, anchorSeconds * pxPerSecond - anchorX);
   return { pxPerSecond, scrollX };
+}
+
+/** Índice de la fila de pista bajo `y`, limitado a las pistas existentes. */
+export function trackIndexAtY(
+  y: number,
+  trackCount: number,
+  layout: TimelineLayout = DEFAULT_TIMELINE_LAYOUT,
+): number {
+  const row = Math.floor((y - layout.rulerHeight) / (layout.trackHeight + layout.trackGap));
+  return Math.min(Math.max(0, row), Math.max(0, trackCount - 1));
+}
+
+export function normalizeRect(x1: number, y1: number, x2: number, y2: number): Rect {
+  return { x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) };
+}
+
+/** Clips que intersectan un rectángulo (selección por arrastre). */
+export function clipsInRect(
+  project: Project,
+  rect: Rect,
+  viewport: TimelineViewport,
+  layout: TimelineLayout = DEFAULT_TIMELINE_LAYOUT,
+): string[] {
+  const ids: string[] = [];
+  project.tracks.forEach((track, trackIndex) => {
+    for (const clip of track.clips) {
+      const r = getClipRect(clip, trackIndex, viewport, layout);
+      const intersects =
+        r.x < rect.x + rect.width && rect.x < r.x + r.width && r.y < rect.y + rect.height && rect.y < r.y + r.height;
+      if (intersects) ids.push(clip.id);
+    }
+  });
+  return ids;
 }

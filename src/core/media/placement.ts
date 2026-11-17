@@ -1,17 +1,11 @@
+import { canClipLiveOn } from "../project/compat";
 import { createClip, DEFAULT_STILL_DURATION, type FactoryOptions } from "../project/factory";
 import { clipEnd } from "../project/queries";
 import type { Clip, MediaAsset, MediaKind, Project, Track } from "../project/schema";
 import type { Microseconds } from "../types/time";
 
-/** Tipos de pista que aceptan cada tipo de medio. */
-const COMPATIBLE_TRACKS: Record<MediaKind, ReadonlyArray<Track["type"]>> = {
-  video: ["video"],
-  image: ["video", "overlay"],
-  audio: ["audio"],
-};
-
 export function isTrackCompatible(track: Track, kind: MediaKind): boolean {
-  return COMPATIBLE_TRACKS[kind].includes(track.type);
+  return canClipLiveOn(kind, track);
 }
 
 /** Pista por defecto para un medio: la primera compatible y desbloqueada, empezando por abajo para video. */

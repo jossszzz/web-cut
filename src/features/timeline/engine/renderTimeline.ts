@@ -5,6 +5,7 @@ import {
   getRulerTickSteps,
   timeToX,
   trackTop,
+  type Rect,
   type TimelineLayout,
   type TimelineViewport,
 } from "@/core/timeline/geometry";
@@ -23,6 +24,10 @@ export interface TimelineRenderState {
   layout: TimelineLayout;
   width: number;
   height: number;
+  /** Instante al que se ha imantado la edición en curso (guía vertical). */
+  snapTime?: number | null;
+  /** Rectángulo de selección por arrastre. */
+  marquee?: Rect | null;
 }
 
 const COLORS = {
@@ -37,6 +42,9 @@ const COLORS = {
   projectEnd: "rgba(255,255,255,0.18)",
   playhead: "#67e8f9",
   selection: "#ffffff",
+  snap: "#facc15",
+  marqueeFill: "rgba(103,232,249,0.12)",
+  marqueeStroke: "rgba(103,232,249,0.8)",
 };
 
 function formatRulerLabel(seconds: number, step: number): string {
@@ -153,6 +161,16 @@ function drawTracks(ctx: CanvasRenderingContext2D, state: TimelineRenderState): 
 
       if (track.locked) drawHatch(ctx, inset.x, inset.y, inset.w, inset.h);
 
+      // Asas de recorte en clips seleccionados y editables.
+      if (selected && !track.locked && inset.w >= 18) {
+        ctx.fillStyle = COLORS.selection;
+        const handleH = inset.h - 16;
+        roundRectPath(ctx, inset.x + 2, inset.y + 8, 3, handleH, 1.5);
+        ctx.fill();
+        roundRectPath(ctx, inset.x + inset.w - 5, inset.y + 8, 3, handleH, 1.5);
+        ctx.fill();
+      }
+
       // Etiqueta recortada al clip.
       ctx.save();
       ctx.beginPath();
@@ -208,6 +226,25 @@ function drawPlayhead(ctx: CanvasRenderingContext2D, state: TimelineRenderState)
   ctx.lineWidth = 1;
 }
 
+function drawOverlays(ctx: CanvasRenderingContext2D, state: TimelineRenderState): void {
+  if (state.snapTime !== null && state.snapTime !== undefined) {
+    const x = Math.round(timeToX(state.snapTime, state.viewport)) + 0.5;
+    ctx.strokeStyle = COLORS.snap;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, state.layout.rulerHeight);
+    ctx.lineTo(x, state.height);
+    ctx.stroke();
+  }
+  if (state.marquee) {
+    const { x, y, width, height } = state.marquee;
+    ctx.fillStyle = COLORS.marqueeFill;
+    ctx.fillRect(x, y, width, height);
+    ctx.strokeStyle = COLORS.marqueeStroke;
+    ctx.strokeRect(x + 0.5, y + 0.5, width, height);
+  }
+}
+
 /** Dibuja el timeline completo. Función pura respecto al estado recibido. */
 export function renderTimeline(ctx: CanvasRenderingContext2D, state: TimelineRenderState): void {
   ctx.clearRect(0, 0, state.width, state.height);
@@ -215,5 +252,6 @@ export function renderTimeline(ctx: CanvasRenderingContext2D, state: TimelineRen
   ctx.fillRect(0, 0, state.width, state.height);
   drawTracks(ctx, state);
   drawRuler(ctx, state);
+  drawOverlays(ctx, state);
   drawPlayhead(ctx, state);
 }

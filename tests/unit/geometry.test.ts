@@ -36,6 +36,7 @@ describe("timeline geometry", () => {
       kind: "clip",
       trackId: project.tracks[2].id,
       clipId: project.tracks[2].clips[0].id,
+      edge: null,
     });
     // Texto (índice 0) empieza en 1 s: a 0,5 s se golpea la pista.
     expect(hitTest(project, 50, trackTop(0) + 10, vp)).toEqual({ kind: "track", trackId: project.tracks[0].id });

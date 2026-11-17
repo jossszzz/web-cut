@@ -1,8 +1,12 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { updateTrackCommand, type TrackPatch } from "@/core/commands/projectCommands";
+import { removeTrackCommand } from "@/core/commands/timelineCommands";
 import type { Project, Track } from "@/core/project/schema";
 
 import { useEditorStore } from "../../store/editorStore";
@@ -64,6 +68,24 @@ export function TrackInspector({ project, track }: { project: Project; track: Tr
           checked={track.locked}
           onChange={(locked) => update({ locked }, "Bloquear pista")}
         />
+      </InspectorSection>
+      <InspectorSection title="Acciones">
+        <Button
+          variant="destructive"
+          size="sm"
+          disabled={track.locked}
+          onClick={() => execute(removeTrackCommand(project, track.id))}
+        >
+          <Trash2 data-icon="inline-start" />
+          Eliminar pista
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          {track.locked
+            ? "Desbloquea la pista para poder eliminarla."
+            : track.clips.length > 0
+              ? `Se eliminarán también sus ${track.clips.length} clips. Puedes deshacerlo.`
+              : "Puedes deshacerlo con ⌘/Ctrl+Z."}
+        </p>
       </InspectorSection>
     </>
   );
