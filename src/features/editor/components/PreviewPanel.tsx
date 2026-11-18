@@ -7,7 +7,13 @@ import { getProjectDuration } from "@/core/project/queries";
 import { formatTimecode } from "@/core/types/time";
 import { PreviewCanvas } from "@/features/preview/components/PreviewCanvas";
 
-import { selectActiveProject, useEditorStore } from "../store/editorStore";
+import { selectActiveProject, useEditorStore, type PreviewScale } from "../store/editorStore";
+
+const QUALITY: ReadonlyArray<{ value: PreviewScale; label: string }> = [
+  { value: 1, label: "Completa" },
+  { value: 0.5, label: "Media" },
+  { value: 0.25, label: "Baja" },
+];
 
 export function PreviewPanel() {
   const project = useEditorStore(selectActiveProject);
@@ -15,6 +21,8 @@ export function PreviewPanel() {
   const isPlaying = useEditorStore((state) => state.isPlaying);
   const togglePlaying = useEditorStore((state) => state.togglePlaying);
   const setPlayhead = useEditorStore((state) => state.setPlayhead);
+  const previewScale = useEditorStore((state) => state.previewScale);
+  const setPreviewScale = useEditorStore((state) => state.setPreviewScale);
   if (!project) return null;
 
   const duration = getProjectDuration(project);
@@ -49,9 +57,26 @@ export function PreviewPanel() {
             <SkipForward />
           </IconButton>
         </div>
-        <span className="justify-self-end text-xs text-muted-foreground tabular-nums">
-          {width} × {height} · {fps} fps
-        </span>
+        <div className="flex items-center gap-3 justify-self-end text-xs text-muted-foreground">
+          <span className="tabular-nums">
+            {width} × {height} · {fps} fps
+          </span>
+          <label className="flex items-center gap-1.5">
+            <span>Calidad</span>
+            <select
+              value={previewScale}
+              onChange={(event) => setPreviewScale(Number(event.target.value) as PreviewScale)}
+              className="h-7 rounded-md border border-input bg-input/30 px-1.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Calidad de la vista previa"
+            >
+              {QUALITY.map((q) => (
+                <option key={q.value} value={q.value}>
+                  {q.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
     </section>
   );

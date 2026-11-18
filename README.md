@@ -3,8 +3,8 @@
 Editor de video web, **local-first** y **browser-based**. La especificación completa está en
 [`docs/arquitectura-roadmap.md`](docs/arquitectura-roadmap.md).
 
-> Estado: **Fase 3** completada (timeline multipista). Todavía no hay reproducción real de video
-> (Fase 4) ni exportación (Fase 6).
+> Estado: **Fase 4** completada (preview y reproducción). Pendientes: herramientas de edición
+> (Fase 5) y exportación (Fase 6).
 
 ## Requisitos
 
@@ -24,6 +24,24 @@ pnpm test             # pruebas unitarias (Vitest)
 pnpm exec playwright install chromium   # solo la primera vez
 pnpm test:e2e         # pruebas E2E (Playwright, compila y arranca la app)
 ```
+
+## Fase 4: preview y reproducción
+
+- **Motor de reproducción** (`features/preview/engine`) independiente de React, con reloj maestro
+  propio. Cada clip con medio usa un `<video>`/`<audio>` que sigue al reloj; si se desvía más de
+  150 ms se reposiciona.
+- **Cambio entre clips sin saltos:** los clips que empiezan en los próximos 2 s se crean y se
+  posicionan en su primer frame por adelantado. Los lejanos se liberan (máx. 8 elementos).
+- **Seeking:** al hacer scrub en pausa, los videos muestran el fotograma exacto; si llega un
+  destino nuevo durante un seek, solo se aplica el último (sin "tormentas" de seeks).
+- **Buffering:** si un clip activo no tiene datos, el reloj se congela, se pausa todo y se muestra
+  un indicador; se reanuda desde el mismo instante.
+- **Audio** por Web Audio API (un `GainNode` por clip): las pistas silenciadas no suenan, también
+  dentro de los videos. El `AudioContext` se reanuda al pulsar reproducir.
+- **Control de FPS:** la preview se repinta solo cuando cambia el frame a los fps del proyecto.
+  Calidad de preview ajustable (completa, media, baja) para equipos menos potentes.
+- Imágenes y texto con su transformación; si un video no se puede reproducir en el navegador se
+  muestra su miniatura con un aviso.
 
 ## Fase 3: timeline multipista
 
@@ -55,8 +73,7 @@ pnpm test:e2e         # pruebas E2E (Playwright, compila y arranca la app)
 - Comprobación de cuota antes de importar, mensajes claros si no hay espacio, solicitud de
   almacenamiento persistente (`navigator.storage.persist()`) e indicador de uso en `/projects`.
 - Añadir al timeline con **+**, doble clic o arrastrando el medio a una pista; sin solapar clips.
-- Miniaturas en la biblioteca y en los clips del timeline. La preview dibuja imágenes reales y,
-  para video, la miniatura como fotograma de referencia hasta la Fase 4.
+- Miniaturas en la biblioteca y en los clips del timeline.
 - Eliminar medios (bloqueado si un clip los usa) y proyectos (borra también sus medios).
 
 ## Sprint 1: interfaz del editor
@@ -85,13 +102,14 @@ src/
 │   ├── commands/            Comandos puros + historial undo/redo
 │   ├── timeline/            Geometría, reglas de edición (mover/recortar) y snapping
 │   ├── media/               Validación de archivos y colocación de clips
+│   ├── playback/            Planificación de la reproducción (clips activos, precarga)
 │   └── ports/               Contratos: ProjectRepository, AssetStorage, MediaAssetRepository
 ├── infrastructure/      Implementaciones locales (Dexie/IndexedDB, cuota de almacenamiento)
 ├── workers/             media.worker.ts (Mediabunny + WebCodecs, vía Comlink)
 ├── features/
 │   ├── editor/              Layout, paneles, inspector, store (Zustand), atajos
 │   ├── timeline/            Renderizador Canvas + componentes
-│   ├── preview/             Renderizador Canvas + reloj de reproducción
+│   ├── preview/             Motor de reproducción, renderizador Canvas y caché de imágenes
 │   ├── media/               Importación, biblioteca, store de assets
 │   ├── projects/            Lista de proyectos y persistencia (autoguardado)
 │   ├── text/

@@ -16,6 +16,8 @@ import { usToSeconds, type Microseconds } from "@/core/types/time";
 export type ProjectTemplate = "empty" | "demo";
 export type EditorTool = "media" | "text" | "audio" | "effects" | "transitions";
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
+/** Escala de resolución del canvas de preview (rendimiento frente a nitidez). */
+export type PreviewScale = 1 | 0.5 | 0.25;
 
 export interface Selection {
   trackId: string | null;
@@ -42,6 +44,9 @@ export interface EditorState {
   selection: Selection;
   playhead: Microseconds;
   isPlaying: boolean;
+  /** La reproducción está esperando datos de algún medio. */
+  isBuffering: boolean;
+  previewScale: PreviewScale;
   viewport: TimelineViewport;
   /** Ancho visible del área de clips (lo informa el canvas). */
   timelineWidth: number;
@@ -68,6 +73,8 @@ export interface EditorState {
   setPlayhead(time: Microseconds): void;
   setPlaying(playing: boolean): void;
   togglePlaying(): void;
+  setBuffering(buffering: boolean): void;
+  setPreviewScale(scale: PreviewScale): void;
 
   setViewport(viewport: TimelineViewport): void;
   zoomBy(factor: number, anchorX?: number): void;
@@ -115,6 +122,8 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     selection: EMPTY_SELECTION,
     playhead: 0,
     isPlaying: false,
+    isBuffering: false,
+    previewScale: 1,
     viewport: DEFAULT_VIEWPORT,
     timelineWidth: 0,
     snapping: true,
@@ -233,6 +242,10 @@ export const useEditorStore = create<EditorState>()((set, get) => {
     },
 
     togglePlaying: () => get().setPlaying(!get().isPlaying),
+
+    setBuffering: (isBuffering) => set({ isBuffering }),
+
+    setPreviewScale: (previewScale) => set({ previewScale }),
 
     setViewport: (viewport) => set({ viewport }),
 

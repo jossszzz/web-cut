@@ -6,8 +6,10 @@ export function prepareCanvas(
   canvas: HTMLCanvasElement,
   width: number,
   height: number,
+  /** Factor adicional de resolución (p. ej. 0.5 para una preview más ligera). */
+  scale = 1,
 ): CanvasRenderingContext2D | null {
-  const dpr = window.devicePixelRatio || 1;
+  const dpr = (window.devicePixelRatio || 1) * scale;
   const pixelWidth = Math.max(1, Math.round(width * dpr));
   const pixelHeight = Math.max(1, Math.round(height * dpr));
   if (canvas.width !== pixelWidth) canvas.width = pixelWidth;

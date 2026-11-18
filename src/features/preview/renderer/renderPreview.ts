@@ -8,20 +8,26 @@ import { CLIP_COLORS } from "@/lib/constants/clipColors";
  * Renderizador de preview.
  *
  * - Imágenes y texto se dibujan tal cual.
- * - Videos: todavía no hay decodificación por frame (Fase 4); se dibuja su
- *   miniatura como fotograma de referencia, con una etiqueta que lo indica.
+ * - Videos: el frame actual del elemento `<video>` que gestiona el motor de
+ *   reproducción; mientras carga, su miniatura.
  * - Clips sin medio (demostración) o con el medio eliminado: marcador de posición.
  *
  * Todo con la transformación real del clip (posición, escala, rotación, opacidad).
  */
+
+export interface ClipImage {
+  image: CanvasImageSource;
+  /** Aviso superpuesto (p. ej. formato no reproducible). */
+  note?: string;
+}
 
 export interface PreviewRenderState {
   project: Project;
   time: Microseconds;
   selectedClipIds: ReadonlySet<string>;
   assets: Readonly<Record<string, MediaAsset>>;
-  /** Devuelve la imagen decodificada del asset, o `null` si aún no está lista. */
-  getFrameSource: (asset: MediaAsset) => CanvasImageSource | null;
+  /** Imagen a dibujar para un clip con medio (con un aviso opcional), o `null` si aún no está lista. */
+  getClipImage: (clip: Clip, asset: MediaAsset) => ClipImage | null;
   /** Tamaño CSS del canvas. */
   width: number;
   height: number;
@@ -115,14 +121,14 @@ function drawMediaClip(
     drawPlaceholder(ctx, clip, w, h, "Medio no disponible");
     return;
   }
-  const source = state.getFrameSource(asset);
+  const source = state.getClipImage(clip, asset);
   if (!source) {
     ctx.fillStyle = "#0b0b0d";
     ctx.fillRect(-w / 2, -h / 2, w, h);
     return;
   }
-  ctx.drawImage(source, -w / 2, -h / 2, w, h);
-  if (clip.type === "video") drawBadge(ctx, "Fotograma de referencia · reproducción en Fase 4", w, h);
+  ctx.drawImage(source.image, -w / 2, -h / 2, w, h);
+  if (source.note) drawBadge(ctx, source.note, w, h);
 }
 
 function drawText(ctx: CanvasRenderingContext2D, clip: Clip): void {

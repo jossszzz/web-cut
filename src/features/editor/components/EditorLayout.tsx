@@ -1,6 +1,6 @@
 "use client";
 
-import { usePlaybackClock } from "@/features/preview/playback/usePlaybackClock";
+import { usePlaybackEngine } from "@/features/preview/engine/usePlaybackEngine";
 import { useAutosave } from "@/features/projects/persistence/projectPersistence";
 
 import { useEditorShortcuts } from "../hooks/useEditorShortcuts";
@@ -17,7 +17,7 @@ import { TimelinePanel } from "./TimelinePanel";
  * timeline 300 px · preview el espacio restante.
  */
 export function EditorLayout() {
-  usePlaybackClock();
+  usePlaybackEngine();
   useAutosave();
   useEditorShortcuts();
 
