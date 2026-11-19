@@ -18,8 +18,9 @@ export interface ActiveMedia {
 const hasPlayableMedia = (clip: Clip): boolean =>
   clip.assetId !== undefined && (clip.type === "video" || clip.type === "audio");
 
+/** Posición en el archivo fuente; la velocidad multiplica el avance. */
 export function sourceTimeAt(clip: Clip, time: Microseconds): Microseconds {
-  return clip.sourceStart + (time - clip.start);
+  return clip.sourceStart + Math.round((time - clip.start) * clip.speed);
 }
 
 /** Clips de video/audio con medio activos en `time` (en el orden de las pistas). */

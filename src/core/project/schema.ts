@@ -38,6 +38,39 @@ export const textStyleSchema = z.object({
 
 export const clipTypeSchema = z.enum(["video", "audio", "image", "text"]);
 
+/** Recorte en fracciones del encuadre original (0 = sin recorte). */
+export const cropSchema = z.object({
+  left: z.number().min(0).max(0.95),
+  top: z.number().min(0).max(0.95),
+  right: z.number().min(0).max(0.95),
+  bottom: z.number().min(0).max(0.95),
+});
+
+export const easingSchema = z.enum(["linear", "ease-in-out"]);
+
+export const keyframeSchema = z.object({
+  /** Microsegundos relativos al inicio del clip en el timeline. */
+  time: z.number().int(),
+  value: z.number(),
+  easing: easingSchema,
+});
+
+/** Propiedades de la transformación que se pueden animar. */
+export const animatablePropertySchema = z.enum(["x", "y", "scaleX", "scaleY", "rotation", "opacity"]);
+
+export const keyframesSchema = z.partialRecord(animatablePropertySchema, z.array(keyframeSchema));
+
+export const transitionTypeSchema = z.enum(["crossfade", "fade", "wipe-left", "slide-left"]);
+
+/** Transición en el corte entre el clip anterior (adyacente, misma pista) y este. */
+export const transitionSchema = z.object({
+  type: transitionTypeSchema,
+  /** Duración total, centrada en el corte. */
+  duration: z.number().int().positive(),
+});
+
+export const NO_CROP = { left: 0, top: 0, right: 0, bottom: 0 } as const;
+
 export const clipSchema = z.object({
   id: z.string().min(1),
   type: clipTypeSchema,
@@ -53,6 +86,13 @@ export const clipSchema = z.object({
   effects: z.array(effectSchema),
   /** Solo para clips de tipo `text`. */
   text: textStyleSchema.optional(),
+  /** Velocidad de reproducción (video/audio). 2 = el doble de rápido. */
+  speed: z.number().min(0.1).max(10).default(1),
+  /** Ganancia del audio (video/audio). 1 = original. */
+  volume: z.number().min(0).max(4).default(1),
+  crop: cropSchema.default(NO_CROP),
+  keyframes: keyframesSchema.default({}),
+  transitionIn: transitionSchema.optional(),
 });
 
 export const trackTypeSchema = z.enum(["video", "audio", "overlay"]);
@@ -116,4 +156,11 @@ export type Track = z.infer<typeof trackSchema>;
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 export type Project = z.infer<typeof projectSchema>;
 export type MediaKind = z.infer<typeof mediaKindSchema>;
+export type Crop = z.infer<typeof cropSchema>;
+export type Easing = z.infer<typeof easingSchema>;
+export type Keyframe = z.infer<typeof keyframeSchema>;
+export type AnimatableProperty = z.infer<typeof animatablePropertySchema>;
+export type Keyframes = z.infer<typeof keyframesSchema>;
+export type TransitionType = z.infer<typeof transitionTypeSchema>;
+export type Transition = z.infer<typeof transitionSchema>;
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;

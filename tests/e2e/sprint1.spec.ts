@@ -44,7 +44,7 @@ test("selecciona pistas y clips y edita propiedades con deshacer", async ({ page
   await expect(inspector.getByLabel("Nombre")).toHaveValue("Toma A");
 
   // Cambiar una propiedad visual.
-  const posX = inspector.getByLabel("Posición X");
+  const posX = inspector.getByLabel("Posición X", { exact: true });
   await posX.fill("250");
   await posX.press("Enter");
   await expect(posX).toHaveValue("250");

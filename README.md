@@ -3,8 +3,8 @@
 Editor de video web, **local-first** y **browser-based**. La especificación completa está en
 [`docs/arquitectura-roadmap.md`](docs/arquitectura-roadmap.md).
 
-> Estado: **Fase 4** completada (preview y reproducción). Pendientes: herramientas de edición
-> (Fase 5) y exportación (Fase 6).
+> Estado: **Fase 5** completada (herramientas de edición). Pendientes: exportación (Fase 6) y
+> optimización y lanzamiento (Fase 7).
 
 ## Requisitos
 
@@ -24,6 +24,27 @@ pnpm test             # pruebas unitarias (Vitest)
 pnpm exec playwright install chromium   # solo la primera vez
 pnpm test:e2e         # pruebas E2E (Playwright, compila y arranca la app)
 ```
+
+## Fase 5: herramientas de edición
+
+- **Dividir** en el cursor (⌘/Ctrl+B o tijeras): los clips seleccionados o, si no hay selección,
+  todos los que estén bajo el cursor. La mitad derecha continúa en el punto correcto de la fuente.
+- **Recortar hasta el cursor**: Q elimina lo que queda a la izquierda y W lo de la derecha.
+- **Crop** por los cuatro lados (video e imagen), en el inspector.
+- **Resize, rotación y posición** con el ratón directamente en la preview: arrastrar mueve (⇧ fija
+  el eje), las esquinas escalan y el asa superior rota (⇧ en pasos de 15°). Botones *Ajustar*,
+  *Rellenar* y *Rotar 90°*.
+- **Opacidad** y **velocidad** (0,25×–4×): la velocidad conserva el tramo de fuente y cambia la
+  duración; si chocaría con el clip siguiente, se acorta hasta él. El audio mantiene el tono.
+- **Volumen** por clip (0–200 %), aplicado con Web Audio.
+- **Transiciones básicas** en el corte entre dos clips pegados: fundido cruzado, fundido a negro,
+  barrido y deslizar. No necesitan solapar clips: usan el último fotograma del clip saliente y el
+  primero del entrante. Panel *Transiciones* y ajuste de tipo/duración en el inspector.
+- **Keyframes** de posición, escala, rotación y opacidad: el rombo junto a cada propiedad añade o
+  quita un keyframe en el cursor; editar una propiedad animada crea el keyframe automáticamente.
+  Navegación entre keyframes y rombos sobre el clip en el timeline. Al dividir, recortar o cambiar
+  la velocidad, la animación sigue al contenido.
+- Los proyectos guardados con versiones anteriores se actualizan solos al abrirse.
 
 ## Fase 4: preview y reproducción
 
@@ -102,7 +123,8 @@ src/
 │   ├── commands/            Comandos puros + historial undo/redo
 │   ├── timeline/            Geometría, reglas de edición (mover/recortar) y snapping
 │   ├── media/               Validación de archivos y colocación de clips
-│   ├── playback/            Planificación de la reproducción (clips activos, precarga)
+│   ├── playback/            Planificación de la reproducción y composición con transiciones
+│   ├── animation/           Keyframes: interpolación, edición, división
 │   └── ports/               Contratos: ProjectRepository, AssetStorage, MediaAssetRepository
 ├── infrastructure/      Implementaciones locales (Dexie/IndexedDB, cuota de almacenamiento)
 ├── workers/             media.worker.ts (Mediabunny + WebCodecs, vía Comlink)

@@ -1,5 +1,6 @@
-import { getVisualClipsAt } from "@/core/project/queries";
-import type { Clip, MediaAsset, Project } from "@/core/project/schema";
+import { evaluateTransform } from "@/core/animation/keyframes";
+import { getVisualLayersAt, type TransitionState } from "@/core/playback/composition";
+import type { Clip, Crop, MediaAsset, Project } from "@/core/project/schema";
 import type { Microseconds } from "@/core/types/time";
 import { sansFont } from "@/lib/canvas";
 import { CLIP_COLORS } from "@/lib/constants/clipColors";
@@ -12,8 +13,11 @@ import { CLIP_COLORS } from "@/lib/constants/clipColors";
  *   reproducción; mientras carga, su miniatura.
  * - Clips sin medio (demostración) o con el medio eliminado: marcador de posición.
  *
- * Todo con la transformación real del clip (posición, escala, rotación, opacidad).
+ * Todo con la transformación del clip evaluada en el instante (keyframes), su
+ * recorte (crop) y, en la ventana de un corte, la transición correspondiente.
  */
+
+import { boxCorners, HANDLE_SIZE, rotateHandlePosition, type PreviewBox } from "./previewGeometry";
 
 export interface ClipImage {
   image: CanvasImageSource;
@@ -31,6 +35,27 @@ export interface PreviewRenderState {
   /** Tamaño CSS del canvas. */
   width: number;
   height: number;
+}
+
+const TEXT_PADDING = 16;
+const SELECTION_COLOR = "#67e8f9";
+
+function intrinsicSize(image: CanvasImageSource): { w: number; h: number } {
+  if (typeof HTMLVideoElement !== "undefined" && image instanceof HTMLVideoElement) {
+    return { w: image.videoWidth, h: image.videoHeight };
+  }
+  const sized = image as { width: number | SVGAnimatedLength; height: number | SVGAnimatedLength };
+  const w = typeof sized.width === "number" ? sized.width : sized.width.baseVal.value;
+  const h = typeof sized.height === "number" ? sized.height : sized.height.baseVal.value;
+  return { w, h };
+}
+
+/** Fracción visible tras el recorte. */
+function cropFactor(crop: Crop) {
+  return {
+    fx: Math.max(0.05, 1 - crop.left - crop.right),
+    fy: Math.max(0.05, 1 - crop.top - crop.bottom),
+  };
 }
 
 /** Caja del contenido de un clip en píxeles del proyecto, centrada en el origen. */
@@ -127,7 +152,12 @@ function drawMediaClip(
     ctx.fillRect(-w / 2, -h / 2, w, h);
     return;
   }
-  ctx.drawImage(source.image, -w / 2, -h / 2, w, h);
+  const { w: iw, h: ih } = intrinsicSize(source.image);
+  const { left, top } = clip.crop;
+  const { fx, fy } = cropFactor(clip.crop);
+  if (iw > 0 && ih > 0) {
+    ctx.drawImage(source.image, left * iw, top * ih, fx * iw, fy * ih, -w / 2, -h / 2, w, h);
+  }
   if (source.note) drawBadge(ctx, source.note, w, h);
 }
 
@@ -148,9 +178,63 @@ function drawText(ctx: CanvasRenderingContext2D, clip: Clip): void {
   ctx.shadowBlur = 0;
 }
 
-export function renderPreview(ctx: CanvasRenderingContext2D, state: PreviewRenderState): void {
+/** Opacidad y desplazamiento que aplica una transición a una capa. */
+function transitionEffect(transition: TransitionState | undefined, width: number) {
+  if (!transition) return { alpha: 1, offsetX: 0, clipFromX: null as number | null };
+  const p = transition.progress;
+  const out = transition.role === "out";
+  switch (transition.type) {
+    case "crossfade":
+      return { alpha: out ? 1 : p, offsetX: 0, clipFromX: null };
+    case "fade":
+      return { alpha: out ? Math.max(0, 1 - 2 * p) : Math.max(0, 2 * p - 1), offsetX: 0, clipFromX: null };
+    case "wipe-left":
+      return { alpha: 1, offsetX: 0, clipFromX: out ? null : width * (1 - p) };
+    case "slide-left":
+      return { alpha: 1, offsetX: out ? -p * width : (1 - p) * width, clipFromX: null };
+  }
+}
+
+function drawSelection(ctx: CanvasRenderingContext2D, base: DOMMatrix, box: PreviewBox): void {
+  ctx.save();
+  ctx.setTransform(base);
+  const corners = boxCorners(box);
+  ctx.strokeStyle = SELECTION_COLOR;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  corners.forEach((c, i) => (i === 0 ? ctx.moveTo(c.x, c.y) : ctx.lineTo(c.x, c.y)));
+  ctx.closePath();
+  ctx.stroke();
+  if (box.editable) {
+    const rotate = rotateHandlePosition(box);
+    const top = { x: (corners[0].x + corners[1].x) / 2, y: (corners[0].y + corners[1].y) / 2 };
+    ctx.beginPath();
+    ctx.moveTo(top.x, top.y);
+    ctx.lineTo(rotate.x, rotate.y);
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    for (const c of corners) {
+      ctx.fillRect(c.x - HANDLE_SIZE / 2, c.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
+      ctx.strokeRect(c.x - HANDLE_SIZE / 2, c.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
+    }
+    ctx.beginPath();
+    ctx.arc(rotate.x, rotate.y, HANDLE_SIZE / 2 + 1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * Dibuja la composición en `state.time` y devuelve las cajas de los clips
+ * pintados (en píxeles CSS), para la interacción con el ratón.
+ */
+export function renderPreview(ctx: CanvasRenderingContext2D, state: PreviewRenderState): PreviewBox[] {
   const { project, width, height } = state;
   const scale = width / project.settings.width;
+  // Transformación base (devicePixelRatio × calidad) fijada por prepareCanvas.
+  const base = ctx.getTransform();
+  const toCss = base.inverse();
 
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = project.settings.backgroundColor;
@@ -162,37 +246,46 @@ export function renderPreview(ctx: CanvasRenderingContext2D, state: PreviewRende
   ctx.rect(0, 0, width, height);
   ctx.clip();
 
-  const selectionBoxes: Array<() => void> = [];
+  const boxes: PreviewBox[] = [];
 
-  for (const { clip } of getVisualClipsAt(project, state.time)) {
-    const { x, y, scaleX, scaleY, rotation, opacity } = clip.transform;
+  for (const { clip, track, localTime, transition } of getVisualLayersAt(project, state.time)) {
+    const { x, y, scaleX, scaleY, rotation, opacity } = evaluateTransform(clip, localTime);
     const asset = clip.assetId ? state.assets[clip.assetId] : undefined;
-    const { w, h } = measureClip(ctx, clip, project, asset);
+    const full = measureClip(ctx, clip, project, asset);
+    const { fx, fy } = clip.type === "text" ? { fx: 1, fy: 1 } : cropFactor(clip.crop);
+    const w = full.w * fx;
+    const h = full.h * fy;
+    const effect = transitionEffect(transition, width);
 
     ctx.save();
-    ctx.translate(width / 2 + x * scale, height / 2 + y * scale);
+    if (effect.clipFromX !== null) {
+      ctx.beginPath();
+      ctx.rect(effect.clipFromX, 0, width - effect.clipFromX, height);
+      ctx.clip();
+    }
+    ctx.translate(width / 2 + x * scale + effect.offsetX, height / 2 + y * scale);
     ctx.rotate((rotation * Math.PI) / 180);
     ctx.scale(scale * scaleX, scale * scaleY);
-    ctx.globalAlpha = opacity;
+    ctx.globalAlpha = opacity * effect.alpha;
     if (clip.type === "text") drawText(ctx, clip);
     else drawMediaClip(ctx, clip, w, h, state);
-    const matrix = ctx.getTransform();
+    const matrix = toCss.multiply(ctx.getTransform());
     ctx.restore();
 
-    if (state.selectedClipIds.has(clip.id)) {
-      selectionBoxes.push(() => {
-        ctx.save();
-        ctx.setTransform(matrix);
-        const pad = clip.type === "text" ? 16 : 0;
-        ctx.strokeStyle = "#67e8f9";
-        ctx.lineWidth = 2 / (scale * Math.max(scaleX, scaleY));
-        ctx.strokeRect(-w / 2 - pad, -h / 2 - pad, w + pad * 2, h + pad * 2);
-        ctx.restore();
-      });
-    }
+    const pad = clip.type === "text" ? TEXT_PADDING : 0;
+    boxes.push({
+      clipId: clip.id,
+      matrix,
+      width: w + pad * 2,
+      height: h + pad * 2,
+      editable: !track.locked,
+    });
   }
   ctx.restore();
 
-  // Cajas de selección encima de todo (pueden salir del encuadre).
-  for (const draw of selectionBoxes) draw();
+  // Controles de selección encima de todo (pueden salir del encuadre).
+  for (const box of boxes) {
+    if (state.selectedClipIds.has(box.clipId)) drawSelection(ctx, base, box);
+  }
+  return boxes;
 }

@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { removeClipsCommand } from "@/core/commands/projectCommands";
 import { frameToUs, secondsToUs, usToFrame } from "@/core/types/time";
 
+import { splitAtPlayhead, trimAtPlayhead } from "../actions/editActions";
 import { selectActiveProject, useEditorStore } from "../store/editorStore";
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -21,7 +22,8 @@ function isTypingTarget(target: EventTarget | null): boolean {
  * Atajos globales del editor:
  * Espacio reproducir/pausar · ⌘/Ctrl+Z deshacer · ⇧⌘/Ctrl+Z o Ctrl+Y rehacer ·
  * Supr/Retroceso eliminar · Esc deseleccionar · ←/→ frame (⇧ = 1 s) ·
- * ⌘/Ctrl+A seleccionar todo · N imán · ⇧Z ajustar el zoom al proyecto.
+ * ⌘/Ctrl+A seleccionar todo · N imán · ⇧Z ajustar el zoom al proyecto ·
+ * ⌘/Ctrl+B dividir · Q/W eliminar a la izquierda/derecha del playhead.
  */
 export function useEditorShortcuts(): void {
   useEffect(() => {
@@ -42,6 +44,11 @@ export function useEditorShortcuts(): void {
       if (mod && key === "a") {
         event.preventDefault();
         state.setSelection(project.tracks.flatMap((t) => t.clips.map((c) => c.id)));
+        return;
+      }
+      if (mod && key === "b") {
+        event.preventDefault();
+        splitAtPlayhead();
         return;
       }
       if (mod && key === "y") {
@@ -71,6 +78,12 @@ export function useEditorShortcuts(): void {
         case "n":
         case "N":
           state.toggleSnapping();
+          break;
+        case "q":
+          trimAtPlayhead("left");
+          break;
+        case "w":
+          trimAtPlayhead("right");
           break;
         case "Z":
           if (event.shiftKey) state.zoomToFit();

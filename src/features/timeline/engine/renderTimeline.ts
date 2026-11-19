@@ -1,3 +1,5 @@
+import { keyframeTimes } from "@/core/animation/keyframes";
+import { getCut } from "@/core/playback/composition";
 import { getProjectDuration } from "@/core/project/queries";
 import type { Clip, MediaAsset, Project } from "@/core/project/schema";
 import {
@@ -161,6 +163,25 @@ function drawTracks(ctx: CanvasRenderingContext2D, state: TimelineRenderState): 
 
       if (track.locked) drawHatch(ctx, inset.x, inset.y, inset.w, inset.h);
 
+      // Keyframes del clip seleccionado.
+      if (selected) {
+        ctx.fillStyle = "#fcd34d";
+        ctx.strokeStyle = "rgba(0,0,0,0.6)";
+        for (const time of keyframeTimes(clip)) {
+          if (time < 0 || time > clip.duration) continue;
+          const kx = rect.x + (time / clip.duration) * rect.width;
+          const ky = inset.y + inset.h - 7;
+          ctx.beginPath();
+          ctx.moveTo(kx, ky - 4);
+          ctx.lineTo(kx + 4, ky);
+          ctx.lineTo(kx, ky + 4);
+          ctx.lineTo(kx - 4, ky);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+
       // Asas de recorte en clips seleccionados y editables.
       if (selected && !track.locked && inset.w >= 18) {
         ctx.fillStyle = COLORS.selection;
@@ -188,6 +209,33 @@ function drawTracks(ctx: CanvasRenderingContext2D, state: TimelineRenderState): 
       ctx.fillText(subtitle, Math.max(inset.x + 8, 8), inset.y + 23);
       ctx.restore();
       ctx.globalAlpha = 1;
+    }
+
+    // Marcadores de transición en los cortes.
+    for (const clip of track.clips) {
+      const cut = getCut(track, clip);
+      if (!cut) continue;
+      const x0 = timeToX(cut.start, viewport);
+      const x1 = timeToX(cut.end, viewport);
+      if (x1 < 0 || x0 > width) continue;
+      const midY = y + layout.trackHeight / 2;
+      const half = Math.min(10, layout.trackHeight / 2 - 6);
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.fillRect(x0, y + 3, x1 - x0, layout.trackHeight - 6);
+      const cx = timeToX(clip.start, viewport);
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "rgba(0,0,0,0.5)";
+      ctx.beginPath(); // "pajarita": dos triángulos enfrentados
+      ctx.moveTo(cx - half, midY - half);
+      ctx.lineTo(cx, midY);
+      ctx.lineTo(cx - half, midY + half);
+      ctx.closePath();
+      ctx.moveTo(cx + half, midY - half);
+      ctx.lineTo(cx, midY);
+      ctx.lineTo(cx + half, midY + half);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
     }
   });
 }

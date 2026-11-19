@@ -11,7 +11,9 @@ import { useElementSize } from "@/lib/hooks/useElementSize";
 
 import { getPlaybackEngine, subscribePreviewFrames } from "../engine/usePlaybackEngine";
 import { getFrameSource, useFrameSourcesVersion } from "../renderer/frameSources";
+import type { PreviewBox } from "../renderer/previewGeometry";
 import { renderPreview, type ClipImage } from "../renderer/renderPreview";
+import { usePreviewGestures } from "./usePreviewGestures";
 
 const PADDING = 24;
 const UNPLAYABLE = "Este navegador no puede reproducir el video";
@@ -42,12 +44,14 @@ export function PreviewCanvas() {
 
   const [containerRef, container] = useElementSize<HTMLDivElement>();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const boxesRef = useRef<PreviewBox[]>([]);
 
   const aspect = project ? project.settings.width / project.settings.height : 16 / 9;
   const availableW = Math.max(0, container.width - PADDING * 2);
   const availableH = Math.max(0, container.height - PADDING * 2);
   const width = Math.floor(Math.min(availableW, availableH * aspect));
   const height = Math.floor(width / aspect);
+  const gestures = usePreviewGestures(boxesRef, width);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -56,7 +60,7 @@ export function PreviewCanvas() {
     if (!canvas || !current || width <= 0 || height <= 0) return;
     const ctx = prepareCanvas(canvas, width, height, editor.previewScale);
     if (!ctx) return;
-    renderPreview(ctx, {
+    boxesRef.current = renderPreview(ctx, {
       project: current,
       time: editor.playhead,
       selectedClipIds: new Set(editor.selection.clipIds),
@@ -100,7 +104,8 @@ export function PreviewCanvas() {
         data-scale={previewScale}
         aria-label={project ? `Vista previa de ${project.name}` : "Vista previa"}
         style={{ width, height }}
-        className="rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
+        className="touch-none rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
+        {...gestures}
       />
       {isBuffering && (
         <div

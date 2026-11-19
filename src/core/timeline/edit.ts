@@ -189,19 +189,22 @@ export function resolveTrim(
 
   let next: ClipTiming;
   if (edge === "start") {
-    const minStart = Math.max(prevEnd, hasSource(clip) ? clip.start - clip.sourceStart : 0);
+    // Con velocidad v, cada µs de timeline consume v µs de fuente.
+    const minStart = Math.max(prevEnd, hasSource(clip) ? clip.start - Math.floor(clip.sourceStart / clip.speed) : 0);
     const maxStart = end - minDuration;
     const start = Math.min(Math.max(target, minStart), maxStart);
     next = {
       start,
       duration: end - start,
-      sourceStart: hasSource(clip) ? clip.sourceStart + (start - clip.start) : clip.sourceStart,
+      sourceStart: hasSource(clip)
+        ? Math.max(0, clip.sourceStart + Math.round((start - clip.start) * clip.speed))
+        : clip.sourceStart,
     };
     if (start !== target) snappedTo = null;
   } else {
     const sourceLimit =
       hasSource(clip) && sourceDuration !== undefined
-        ? clip.start + (sourceDuration - clip.sourceStart)
+        ? clip.start + Math.floor((sourceDuration - clip.sourceStart) / clip.speed)
         : Number.POSITIVE_INFINITY;
     const newEnd = Math.min(Math.max(target, clip.start + minDuration), nextStart, sourceLimit);
     next = { start: clip.start, duration: newEnd - clip.start, sourceStart: clip.sourceStart };

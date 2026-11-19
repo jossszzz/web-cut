@@ -1,6 +1,19 @@
 "use client";
 
-import { Magnet, Maximize2, Music, Plus, Trash2, Type, Video, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  ArrowLeftToLine,
+  ArrowRightToLine,
+  Magnet,
+  Maximize2,
+  Music,
+  Plus,
+  Scissors,
+  Trash2,
+  Type,
+  Video,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 
 import { IconButton } from "@/components/shared/IconButton";
 import { Button } from "@/components/ui/button";
@@ -17,6 +30,7 @@ import { MAX_PX_PER_SECOND, MIN_PX_PER_SECOND } from "@/core/timeline/geometry";
 import { TimelineCanvas } from "@/features/timeline/components/TimelineCanvas";
 import { TrackHeaders } from "@/features/timeline/components/TrackHeaders";
 
+import { canEditAtPlayhead, splitAtPlayhead, trimAtPlayhead } from "../actions/editActions";
 import { selectActiveProject, useEditorStore } from "../store/editorStore";
 
 const ZOOM_STEP = 1.5;
@@ -37,7 +51,9 @@ export function TimelinePanel() {
   const toggleSnapping = useEditorStore((state) => state.toggleSnapping);
   const execute = useEditorStore((state) => state.execute);
   const selectTrack = useEditorStore((state) => state.selectTrack);
+  const playhead = useEditorStore((state) => state.playhead);
   if (!project) return null;
+  const canEdit = canEditAtPlayhead(project, playhead, selectedClipIds);
 
   const addTrack = (type: TrackType) => {
     const command = addTrackCommand(project, type);
@@ -66,6 +82,15 @@ export function TimelinePanel() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        <IconButton label="Dividir en el cursor" hint="⌘/Ctrl+B" disabled={!canEdit} onClick={splitAtPlayhead}>
+          <Scissors />
+        </IconButton>
+        <IconButton label="Eliminar a la izquierda del cursor" hint="Q" disabled={!canEdit} onClick={() => trimAtPlayhead("left")}>
+          <ArrowLeftToLine />
+        </IconButton>
+        <IconButton label="Eliminar a la derecha del cursor" hint="W" disabled={!canEdit} onClick={() => trimAtPlayhead("right")}>
+          <ArrowRightToLine />
+        </IconButton>
         <IconButton
           label="Eliminar selección"
           hint="Supr"

@@ -1,3 +1,4 @@
+import { getHeldFrames } from "@/core/playback/composition";
 import {
   getMediaClipsAt,
   getUpcomingMediaClips,
@@ -31,6 +32,7 @@ export const HAVE_FUTURE_DATA = 3;
 
 export interface MediaElementLike {
   currentTime: number;
+  playbackRate: number;
   src: string;
   readonly duration: number;
   readonly paused: boolean;
@@ -242,6 +244,7 @@ export class PlaybackEngine {
     const active = getMediaClipsAt(project, time);
     const stalled = this.syncPlaying(snapshot, active, now);
     this.preload(project, snapshot.assets, time);
+    this.holdFrames(project, snapshot.assets, time);
     this.pauseInactive(active);
 
     if (stalled && !this.buffering) {
@@ -276,9 +279,10 @@ export class PlaybackEngine {
       const entry = this.ensureEntry(clip, asset);
       if (entry.failed) continue;
       entry.lastUsed = now;
-      entry.route?.setGain(track.muted ? 0 : 1);
+      entry.route?.setGain(track.muted ? 0 : clip.volume);
 
       const { element } = entry;
+      if (element.playbackRate !== clip.speed) element.playbackRate = clip.speed;
       const expected = usToSeconds(sourceTime);
       const nearEnd = Number.isFinite(element.duration) && element.duration - expected < END_OF_SOURCE_MARGIN_S;
       const ready =
@@ -315,12 +319,13 @@ export class PlaybackEngine {
       if (!asset) continue;
       const entry = this.ensureEntry(clip, asset);
       entry.lastUsed = this.platform.now();
-      entry.route?.setGain(track.muted ? 0 : 1);
+      entry.route?.setGain(track.muted ? 0 : clip.volume);
       if (!entry.element.paused) entry.element.pause();
       this.seek(entry, sourceTime, project.settings.fps);
     }
     this.pauseInactive(active);
     this.preload(project, snapshot.assets, snapshot.playhead);
+    this.holdFrames(project, snapshot.assets, snapshot.playhead);
     this.evict(project, snapshot.playhead);
     this.host.onFrame();
   }
@@ -346,6 +351,19 @@ export class PlaybackEngine {
       entry.lastUsed = this.platform.now();
       if (!entry.element.paused) entry.element.pause();
       this.seek(entry, clip.sourceStart, project.settings.fps);
+    }
+  }
+
+  /** Clips en la ventana de una transición fuera de su rango: fotograma congelado. */
+  private holdFrames(project: Project, assets: Readonly<Record<string, MediaAsset>>, time: Microseconds): void {
+    const { fps } = project.settings;
+    for (const { clip, sourceTime } of getHeldFrames(project, time, frameToUs(1, fps))) {
+      const asset = clip.assetId ? assets[clip.assetId] : undefined;
+      if (!asset) continue;
+      const entry = this.ensureEntry(clip, asset);
+      entry.lastUsed = this.platform.now();
+      if (!entry.element.paused) entry.element.pause();
+      this.seek(entry, sourceTime, fps);
     }
   }
 

@@ -1,5 +1,5 @@
 import { findClip, findTrack } from "../project/queries";
-import type { Clip, Project, ProjectSettings, TextStyle, Track, Transform } from "../project/schema";
+import type { Clip, Crop, Project, ProjectSettings, TextStyle, Track, Transform } from "../project/schema";
 import type { Command } from "./types";
 
 /* ------------------------------------------------------------------ */
@@ -32,15 +32,19 @@ export interface ClipPatch {
   name?: string;
   transform?: Partial<Transform>;
   text?: Partial<TextStyle>;
+  volume?: number;
+  crop?: Partial<Crop>;
 }
 
-type ClipFields = Pick<Clip, "name" | "transform" | "text">;
+type ClipFields = Pick<Clip, "name" | "transform" | "text" | "volume" | "crop">;
 
 function pickClipFields(clip: Clip, patch: ClipPatch): Partial<ClipFields> {
   const fields: Partial<ClipFields> = {};
   if (patch.name !== undefined) fields.name = clip.name;
   if (patch.transform !== undefined) fields.transform = clip.transform;
   if (patch.text !== undefined) fields.text = clip.text;
+  if (patch.volume !== undefined) fields.volume = clip.volume;
+  if (patch.crop !== undefined) fields.crop = clip.crop;
   return fields;
 }
 
@@ -49,6 +53,8 @@ function applyClipPatch(clip: Clip, patch: ClipPatch): Partial<ClipFields> {
   if (patch.name !== undefined) fields.name = patch.name;
   if (patch.transform !== undefined) fields.transform = { ...clip.transform, ...patch.transform };
   if (patch.text !== undefined && clip.text) fields.text = { ...clip.text, ...patch.text };
+  if (patch.volume !== undefined) fields.volume = Math.min(4, Math.max(0, patch.volume));
+  if (patch.crop !== undefined) fields.crop = { ...clip.crop, ...patch.crop };
   return fields;
 }
 

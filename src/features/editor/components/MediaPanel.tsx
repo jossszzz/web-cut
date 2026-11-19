@@ -2,14 +2,14 @@
 
 import { TextPanel } from "@/features/text/components/TextPanel";
 import { MediaLibrary } from "@/features/media/components/MediaLibrary";
+import { TransitionsPanel } from "@/features/transitions/components/TransitionsPanel";
 
 import { useEditorStore, type EditorTool } from "../store/editorStore";
 import { EDITOR_TOOLS } from "./EditorSidebar";
 
 const COMING_SOON: Partial<Record<EditorTool, string>> = {
-  audio: "Importa música y sonidos desde Medios. La mezcla y el control de volumen llegan en la Fase 5.",
-  effects: "Los efectos visuales llegan en la Fase 5.",
-  transitions: "Las transiciones básicas llegan en la Fase 5.",
+  audio: "Importa música y sonidos desde Medios. El volumen y la velocidad de cada clip se ajustan en el inspector.",
+  effects: "Los filtros y efectos visuales llegarán en una próxima versión.",
 };
 
 /** Panel izquierdo de 260 px; su contenido depende de la herramienta activa. */
@@ -23,6 +23,7 @@ export function MediaPanel() {
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {activeTool === "media" && <MediaLibrary />}
         {activeTool === "text" && <TextPanel />}
+        {activeTool === "transitions" && <TransitionsPanel />}
         {COMING_SOON[activeTool] && (
           <p className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
             {COMING_SOON[activeTool]}

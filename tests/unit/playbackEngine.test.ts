@@ -19,6 +19,7 @@ import {
 
 class FakeElement implements MediaElementLike {
   src = "";
+  playbackRate = 1;
   duration = 60;
   paused = true;
   seeking = false;
@@ -69,7 +70,7 @@ class FakeElement implements MediaElementLike {
   }
   /** Avanza la reproducción interna del elemento. */
   advance(seconds: number) {
-    if (!this.paused) this.time += seconds;
+    if (!this.paused) this.time += seconds * this.playbackRate;
   }
 }
 
@@ -314,6 +315,36 @@ describe("PlaybackEngine", () => {
     const [a, m] = env.p.elements;
     expect(env.p.gains.get(a)).toBe(1);
     expect(env.p.gains.get(m)).toBe(0);
+  });
+
+  it("aplica la velocidad y el volumen de cada clip", async () => {
+    env.project.tracks[2].clips[0] = { ...env.A, speed: 2, volume: 0.5 };
+    env.engine.start();
+    await flush();
+    env.p.elements.forEach((el) => el.settle());
+    const a = env.p.elements[0];
+    expect(env.p.gains.get(a)).toBe(0.5);
+    env.h.set({ isPlaying: true });
+    await env.p.runFrame(0);
+    expect(a.playbackRate).toBe(2);
+    await env.p.runFrame(500);
+    // 0,5 s de timeline a 2× = 1 s de fuente: 10 s + 1 s; sin reposicionar.
+    expect(a.seeks.at(-1)).toBe(10);
+    env.h.set({ isPlaying: false });
+    expect(a.currentTime).toBeCloseTo(11, 2);
+  });
+
+  it("mantiene el último fotograma del clip saliente durante una transición", async () => {
+    const B = { ...env.B, transitionIn: { type: "crossfade" as const, duration: s(1) } };
+    env.project.tracks[2].clips[1] = B;
+    env.h.set({ playhead: s(2.3) }); // 0,3 s después del corte, dentro de la ventana
+    env.engine.start();
+    await flush();
+    const a = env.p.elements.find((el) => el.src === "blob:va")!;
+    // Fuente de A: 10 s + 2 s de clip − 1 frame.
+    expect(a.currentTime).toBeCloseTo(12 - 1 / 30, 3);
+    a.settle();
+    expect(env.engine.getVideoFrame(env.A.id)).toEqual({ image: a });
   });
 
   it("pinta solo cuando cambia el frame del proyecto", async () => {

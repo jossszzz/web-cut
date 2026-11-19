@@ -1,3 +1,4 @@
+import { shiftKeyframes } from "../animation/keyframes";
 import { createTrack } from "../project/factory";
 import { findClip, findTrack } from "../project/queries";
 import type { Clip, Project, Track, TrackType } from "../project/schema";
@@ -51,7 +52,15 @@ function setTiming(project: Project, clipId: string, timing: ClipTiming): Projec
     ...project,
     tracks: project.tracks.map((track) =>
       track.clips.some((c) => c.id === clipId)
-        ? { ...track, clips: track.clips.map((c) => (c.id === clipId ? { ...c, ...timing } : c)) }
+        ? {
+            ...track,
+            clips: track.clips.map((c) =>
+              c.id === clipId
+                ? // Los keyframes quedan anclados al contenido: si el inicio se mueve, se compensan.
+                  { ...c, ...timing, keyframes: shiftKeyframes(c.keyframes, c.start - timing.start) }
+                : c,
+            ),
+          }
         : track,
     ),
   };

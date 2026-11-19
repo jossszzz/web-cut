@@ -98,10 +98,13 @@ export function NumberField({
   step = 1,
   suffix,
   precision = 0,
+  labelAction,
 }: {
   label: string;
   value: number;
   onCommit: (value: number) => void;
+  /** Control junto a la etiqueta (p. ej. botón de keyframe). */
+  labelAction?: ReactNode;
   min?: number;
   max?: number;
   step?: number;
@@ -111,6 +114,11 @@ export function NumberField({
   const id = useId();
   const [draft, setDraft] = useState<string | null>(null);
   const formatted = Number(value.toFixed(precision)).toString();
+  const labelNode = (
+    <Label htmlFor={id} className="text-xs text-muted-foreground">
+      {label}
+    </Label>
+  );
 
   const commit = () => {
     if (draft === null) return;
@@ -123,9 +131,14 @@ export function NumberField({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id} className="text-xs text-muted-foreground">
-        {label}
-      </Label>
+      {labelAction ? (
+        <div className="flex h-5 items-center justify-between">
+          {labelNode}
+          {labelAction}
+        </div>
+      ) : (
+        labelNode
+      )}
       <div className="relative">
         <Input
           id={id}
@@ -170,6 +183,7 @@ export function SliderField({
   format,
   onChange,
   onCommit,
+  labelAction,
 }: {
   label: string;
   value: number;
@@ -179,20 +193,24 @@ export function SliderField({
   format: (value: number) => string;
   onChange: (value: number) => void;
   onCommit: () => void;
+  labelAction?: ReactNode;
 }) {
   const id = useId();
   const pick = (v: number | readonly number[]) => (Array.isArray(v) ? v[0] : v) as number;
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <Label id={id} className="text-xs text-muted-foreground">
-          {label}
-        </Label>
+        <span className="flex items-center gap-1">
+          <Label id={id} className="text-xs text-muted-foreground">
+            {label}
+          </Label>
+          {labelAction}
+        </span>
         <span className="font-mono text-xs tabular-nums">{format(value)}</span>
       </div>
       <Slider
         aria-labelledby={id}
-        value={[value]}
+        value={[Math.min(max, Math.max(min, value))]}
         min={min}
         max={max}
         step={step}

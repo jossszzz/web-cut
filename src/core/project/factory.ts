@@ -81,6 +81,10 @@ export function createClip(
     sourceStart: input.sourceStart ?? 0,
     transform: { ...IDENTITY_TRANSFORM, ...input.transform },
     effects: [],
+    speed: 1,
+    volume: 1,
+    crop: { left: 0, top: 0, right: 0, bottom: 0 },
+    keyframes: {},
   };
   if (input.assetId) clip.assetId = input.assetId;
   if (input.type === "text") clip.text = { ...DEFAULT_TEXT_STYLE, ...input.text };
