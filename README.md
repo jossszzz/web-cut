@@ -3,8 +3,7 @@
 Editor de video web, **local-first** y **browser-based**. La especificación completa está en
 [`docs/arquitectura-roadmap.md`](docs/arquitectura-roadmap.md).
 
-> Estado: **Fase 5** completada (herramientas de edición). Pendientes: exportación (Fase 6) y
-> optimización y lanzamiento (Fase 7).
+> Estado: **Fase 6** completada (exportación MP4). Pendiente: optimización y lanzamiento (Fase 7).
 
 ## Requisitos
 
@@ -24,6 +23,34 @@ pnpm test             # pruebas unitarias (Vitest)
 pnpm exec playwright install chromium   # solo la primera vez
 pnpm test:e2e         # pruebas E2E (Playwright, compila y arranca la app)
 ```
+
+## Fase 6: exportación MP4
+
+- Botón **Exportar** → diálogo con resolución (la del proyecto, 4K, 1080p, 720p, 480p; nunca por
+  encima del proyecto, conservando la proporción), fotogramas por segundo y calidad.
+- **Detección de capacidades**: antes de exportar se comprueba WebCodecs y qué códecs puede
+  codificar el navegador para ese tamaño. Preferencia: H.264 (+ AAC); si no, H.265/VP9/AV1 en MP4
+  (+ Opus). Sin códec de audio se exporta sin sonido, con aviso.
+- **Composición frame a frame en un Web Worker** (`export.worker.ts`) con el mismo compositor que la
+  preview (`features/render/compositor.ts`): capas, keyframes, crop y transiciones salen idénticos.
+  Los textos y marcadores se prerenderizan en el hilo principal (tipografía de la app) y se
+  transfieren como `ImageBitmap`.
+- **Decodificación** secuencial con Mediabunny (`VideoSampleSink`/`AudioSampleSink`): cada paquete se
+  decodifica una vez; los lectores se abren al entrar el clip y se cierran al salir.
+- **Audio**: mezcla por bloques de 0,25 s a 48 kHz estéreo (volumen por clip, pistas silenciadas,
+  velocidad, rampas de 4 ms anti-chasquidos y limitación a [-1, 1]).
+- **Codificación y multiplexado MP4** con Mediabunny respetando la contrapresión del codificador. El
+  archivo se escribe directamente en disco (OPFS, `FileSystemSyncAccessHandle`) cuando el navegador
+  lo permite, así que la memoria no crece con la duración; si no, en memoria.
+- **Progreso** (fase, frame actual, tiempo restante), **cancelación** (y si el worker no responde en
+  5 s, se termina) y **errores recuperables** con mensaje claro: medio que falta o no
+  decodificable (con botón *Ir al clip*), sin espacio, fallo del codificador o caída del worker.
+  Se puede reintentar sin recargar.
+- Al terminar: vista previa del resultado, tamaño y **Descargar**.
+- **Pruebas de calidad de salida** (E2E): el MP4 se analiza con Mediabunny (códec, tamaño, duración,
+  número de frames, pistas de audio); un fotograma exportado se compara con la preview en el mismo
+  instante (sin desfase, también en mitad de una transición) y se mide el nivel del audio
+  exportado donde hay sonido y donde debe haber silencio.
 
 ## Fase 5: herramientas de edición
 
@@ -125,13 +152,17 @@ src/
 │   ├── media/               Validación de archivos y colocación de clips
 │   ├── playback/            Planificación de la reproducción y composición con transiciones
 │   ├── animation/           Keyframes: interpolación, edición, división
+│   ├── export/              Ajustes de exportación y análisis previo (plan)
+│   ├── audio/               Mezcla de audio por bloques (remuestreo, volumen, velocidad)
 │   └── ports/               Contratos: ProjectRepository, AssetStorage, MediaAssetRepository
 ├── infrastructure/      Implementaciones locales (Dexie/IndexedDB, cuota de almacenamiento)
-├── workers/             media.worker.ts (Mediabunny + WebCodecs, vía Comlink)
+├── workers/             media.worker.ts y export.worker.ts (Mediabunny + WebCodecs, vía Comlink)
 ├── features/
 │   ├── editor/              Layout, paneles, inspector, store (Zustand), atajos
 │   ├── timeline/            Renderizador Canvas + componentes
 │   ├── preview/             Motor de reproducción, renderizador Canvas y caché de imágenes
+│   ├── render/              Compositor compartido por preview y exportación
+│   ├── export/              Diálogo, servicio, store y motor de exportación (worker)
 │   ├── media/               Importación, biblioteca, store de assets
 │   ├── projects/            Lista de proyectos y persistencia (autoguardado)
 │   ├── text/
@@ -153,3 +184,12 @@ ediciones pasan por comandos; los renderizadores de canvas son funciones indepen
   "Medio no disponible".
 - Compatibilidad de códecs según navegador: H.264/AAC no está disponible en algunas builds de
   Chromium sin códecs propietarios; en ese caso se muestra un error claro al importar.
+- Exportación:
+  - Con velocidad distinta de 1× el audio exportado cambia de tono (en la preview se conserva):
+    el remuestreo es lineal, sin corrección de tono.
+  - Solo se usan los dos primeros canales de audio de cada fuente (sonido envolvente → estéreo).
+  - El tamaño estimado es un máximo orientativo; con contenido sencillo el archivo es menor.
+  - Si el codificador elegido no es H.264, algunos reproductores (p. ej. QuickTime) podrían no
+    abrir el archivo.
+  - Las pruebas automáticas cubren Chromium; Firefox (sin `AudioEncoder` AAC) y Safari quedan para
+    la Fase 7.

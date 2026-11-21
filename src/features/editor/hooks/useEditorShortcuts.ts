@@ -18,6 +18,12 @@ function isTypingTarget(target: EventTarget | null): boolean {
   );
 }
 
+/** Con un diálogo modal abierto (p. ej. exportar) los atajos del editor no aplican. */
+function isInsideDialog(target: EventTarget | null): boolean {
+  if (target instanceof HTMLElement && target.closest("[role=dialog]")) return true;
+  return document.querySelector("[role=dialog][data-open]") !== null;
+}
+
 /**
  * Atajos globales del editor:
  * Espacio reproducir/pausar · ⌘/Ctrl+Z deshacer · ⇧⌘/Ctrl+Z o Ctrl+Y rehacer ·
@@ -28,7 +34,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 export function useEditorShortcuts(): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isTypingTarget(event.target)) return;
+      if (isTypingTarget(event.target) || isInsideDialog(event.target)) return;
       const state = useEditorStore.getState();
       const project = selectActiveProject(state);
       if (!project) return;

@@ -1,12 +1,11 @@
 "use client";
 
-import { AlertCircle, Check, Clapperboard, Download, Loader2, Redo2, Undo2 } from "lucide-react";
+import { AlertCircle, Check, Clapperboard, Loader2, Redo2, Undo2 } from "lucide-react";
 import Link from "next/link";
 
 import { IconButton } from "@/components/shared/IconButton";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { canRedo, canUndo } from "@/core/commands/history";
+import { ExportDialog } from "@/features/export/components/ExportDialog";
 
 import { selectActiveProject, useEditorStore } from "../store/editorStore";
 
@@ -68,15 +67,7 @@ export function EditorHeader() {
 
         <div className="mx-2 h-5 w-px bg-border" aria-hidden />
 
-        <Tooltip>
-          <TooltipTrigger render={<span className="inline-flex" />}>
-            <Button disabled size="sm">
-              <Download data-icon="inline-start" />
-              Exportar
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>La exportación a MP4 llega en la Fase 6</TooltipContent>
-        </Tooltip>
+        <ExportDialog />
       </div>
     </header>
   );
