@@ -257,12 +257,13 @@ export class PlaybackEngine {
       this.anchor(time);
     }
 
-    if (!this.buffering) this.withInternal(() => this.host.setPlayhead(time));
-
-    // Control de FPS: solo se pide un redibujado cuando cambia el frame del proyecto.
+    // Control de FPS: el tiempo se publica (y se pide redibujar) solo cuando
+    // cambia el frame del proyecto. En pantallas de 120 Hz con un proyecto a
+    // 30 fps, eso evita 3 de cada 4 actualizaciones del estado y de la UI.
     const frameIndex = usToFrame(time, project.settings.fps);
-    if (frameIndex !== this.lastFrameIndex) {
+    if (frameIndex !== this.lastFrameIndex && !this.buffering) {
       this.lastFrameIndex = frameIndex;
+      this.withInternal(() => this.host.setPlayhead(time));
       this.host.onFrame();
     }
 

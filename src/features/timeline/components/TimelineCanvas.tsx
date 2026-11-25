@@ -18,7 +18,7 @@ import { getThumbnailSource, useFrameSourcesVersion } from "@/features/preview/r
 import { prepareCanvas } from "@/lib/canvas";
 import { useElementSize } from "@/lib/hooks/useElementSize";
 
-import { renderTimeline } from "../engine/renderTimeline";
+import { renderPlayhead, renderTimeline } from "../engine/renderTimeline";
 import { useTimelineInteractions } from "./useTimelineInteractions";
 
 const layout = DEFAULT_TIMELINE_LAYOUT;
@@ -35,7 +35,6 @@ export function TimelineCanvas() {
   // Durante un gesto se dibuja la vista previa en lugar del proyecto guardado.
   const project = preview.project ?? storeProject;
   const selection = useEditorStore((state) => state.selection);
-  const playhead = useEditorStore((state) => state.playhead);
   const viewport = useEditorStore((state) => state.viewport);
   const selectedClipIds = useMemo(() => new Set(selection.clipIds), [selection.clipIds]);
   const assets = useMediaStore((state) => state.assets);
@@ -43,6 +42,7 @@ export function TimelineCanvas() {
 
   const [containerRef, size] = useElementSize<HTMLDivElement>();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const playheadRef = useRef<HTMLCanvasElement>(null);
   const setTimelineWidth = useEditorStore((state) => state.setTimelineWidth);
 
   useEffect(() => {
@@ -56,13 +56,14 @@ export function TimelineCanvas() {
     if (!canvas || !project || size.width <= 0) return;
     const ctx = prepareCanvas(canvas, size.width, height);
     if (!ctx) return;
+    // Contador de repintados completos (lo comprueban las pruebas de rendimiento).
+    canvas.dataset.draws = String(Number(canvas.dataset.draws ?? 0) + 1);
     renderTimeline(ctx, {
       project,
       selectedTrackId: selection.trackId,
       selectedClipIds,
       assets,
       getThumbnail: getThumbnailSource,
-      playhead,
       viewport,
       layout,
       width: size.width,
@@ -76,13 +77,28 @@ export function TimelineCanvas() {
     selectedClipIds,
     assets,
     framesVersion,
-    playhead,
     viewport,
     size.width,
     height,
     preview.snapTime,
     preview.marquee,
   ]);
+
+  // Cursor: se pinta fuera de React, solo cuando cambian el tiempo o el viewport
+  // (durante la reproducción, ~60 veces/s, sin re-renderizar componentes).
+  useEffect(() => {
+    const canvas = playheadRef.current;
+    if (!canvas || size.width <= 0 || height <= 0) return;
+    const ctx = prepareCanvas(canvas, size.width, height);
+    if (!ctx) return;
+    const draw = (playhead: number, vp: typeof viewport) =>
+      renderPlayhead(ctx, { playhead, viewport: vp, width: size.width, height });
+    const initial = useEditorStore.getState();
+    draw(initial.playhead, initial.viewport);
+    return useEditorStore.subscribe((state, prev) => {
+      if (state.playhead !== prev.playhead || state.viewport !== prev.viewport) draw(state.playhead, state.viewport);
+    });
+  }, [size.width, height]);
 
   // Rueda: desplazamiento horizontal y zoom con ⌘/Ctrl. Necesita listener no pasivo.
   useEffect(() => {
@@ -142,6 +158,12 @@ export function TimelineCanvas() {
           event.dataTransfer.dropEffect = "copy";
         }}
         onDrop={onDrop}
+      />
+      <canvas
+        ref={playheadRef}
+        aria-hidden
+        style={{ width: "100%", height }}
+        className="pointer-events-none absolute inset-x-0 top-0 block"
       />
     </div>
   );

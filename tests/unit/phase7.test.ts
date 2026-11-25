@@ -54,3 +54,25 @@ describe("compatibilidad del navegador", async () => {
     expect(canExport(old)).toBe(false);
   });
 });
+
+describe("resolución del cursor en el inspector", async () => {
+  const { inspectorPlayhead } = await import("@/features/editor/components/inspector/ClipInspector");
+  const { createClip } = await import("@/core/project/factory");
+  const s = (seconds: number) => Math.round(seconds * 1_000_000);
+  const clip = createClip({ type: "video", name: "a", start: s(2), duration: s(4) });
+
+  it("sin keyframes solo distingue dentro/fuera (no cambia durante la reproducción)", () => {
+    const values = [2.1, 3, 4.5, 5.9].map((t) => inspectorPlayhead(clip, s(t), true));
+    expect(new Set(values)).toEqual(new Set([s(2)]));
+    expect(inspectorPlayhead(clip, s(1), false)).toBe(-1);
+    expect(inspectorPlayhead(clip, s(7), true)).toBe(-1);
+  });
+
+  it("con keyframes: exacto en pausa y a 4 Hz mientras se reproduce", () => {
+    const animated = { ...clip, keyframes: { x: [{ time: 0, value: 0, easing: "linear" as const }] } };
+    expect(inspectorPlayhead(animated, s(3.1234), false)).toBe(s(3.1234));
+    expect(inspectorPlayhead(animated, s(3.1), true)).toBe(s(3));
+    expect(inspectorPlayhead(animated, s(3.24), true)).toBe(s(3));
+    expect(inspectorPlayhead(animated, s(3.26), true)).toBe(s(3.25));
+  });
+});

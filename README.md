@@ -43,6 +43,11 @@ intensivo para la CPU.
 - **Miniaturas**: el timeline usa bitmaps pequeños (96 px de alto) en lugar de la imagen original (hasta
   4K); las miniaturas de imágenes se guardan en WebP (con transparencia) cuando el navegador lo admite; las
   tarjetas de la biblioteca cargan sus imágenes en diferido.
+- **CPU durante la reproducción**: el cursor del timeline va en un canvas superpuesto (los clips no se
+  repintan en cada frame); el motor publica el tiempo una vez por frame del proyecto (no a la frecuencia
+  de la pantalla, hasta 120 Hz); los paneles se suscriben a datos derivados (¿se puede editar en el
+  cursor?, número de frame, dentro/fuera del clip) y el inspector refresca los valores animados a 4 Hz
+  mientras se reproduce. Una prueba E2E comprueba que el timeline no se repinta entero al reproducir.
 - **Carga diferida**: Mediabunny solo se carga en los workers; el contenido del diálogo de exportación y los
   paneles de Texto y Transiciones se descargan al abrirlos.
 - **Navegadores**: suite E2E en Chromium (Chrome/Edge) y WebKit (Safari). Arreglos para WebKit: respaldo

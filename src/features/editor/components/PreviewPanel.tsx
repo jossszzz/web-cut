@@ -4,7 +4,7 @@ import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 
 import { IconButton } from "@/components/shared/IconButton";
 import { getProjectDuration } from "@/core/project/queries";
-import { formatTimecode } from "@/core/types/time";
+import { formatTimecode, frameToUs, usToFrame } from "@/core/types/time";
 import { PreviewCanvas } from "@/features/preview/components/PreviewCanvas";
 
 import { selectActiveProject, useEditorStore, type PreviewScale } from "../store/editorStore";
@@ -15,9 +15,18 @@ const QUALITY: ReadonlyArray<{ value: PreviewScale; label: string }> = [
   { value: 0.25, label: "Baja" },
 ];
 
+/**
+ * Tiempo actual. Componente aparte suscrito al número de frame (no al tiempo
+ * exacto): durante la reproducción solo él se re-renderiza, una vez por frame
+ * del proyecto, en lugar de todo el panel (canvas incluido) a 60 Hz.
+ */
+function CurrentTimecode({ fps }: { fps: number }) {
+  const frame = useEditorStore((state) => usToFrame(state.playhead, fps));
+  return <span className="text-primary">{formatTimecode(frameToUs(frame, fps), fps)}</span>;
+}
+
 export function PreviewPanel() {
   const project = useEditorStore(selectActiveProject);
-  const playhead = useEditorStore((state) => state.playhead);
   const isPlaying = useEditorStore((state) => state.isPlaying);
   const togglePlaying = useEditorStore((state) => state.togglePlaying);
   const setPlayhead = useEditorStore((state) => state.setPlayhead);
@@ -36,7 +45,7 @@ export function PreviewPanel() {
           aria-label="Tiempo actual"
           className="font-mono text-xs tabular-nums"
         >
-          <span className="text-primary">{formatTimecode(playhead, fps)}</span>
+          <CurrentTimecode fps={fps} />
           <span className="text-muted-foreground"> / {formatTimecode(duration, fps)}</span>
         </output>
         <div className="flex items-center gap-1">

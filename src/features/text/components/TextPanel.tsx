@@ -21,7 +21,6 @@ const PRESETS: ReadonlyArray<{
 
 export function TextPanel() {
   const project = useEditorStore(selectActiveProject);
-  const playhead = useEditorStore((state) => state.playhead);
   const execute = useEditorStore((state) => state.execute);
   const selectClip = useEditorStore((state) => state.selectClip);
 
@@ -32,7 +31,8 @@ export function TextPanel() {
     const clip = createClip({
       type: "text",
       name: preset.label,
-      start: playhead,
+      // Se lee al hacer clic: suscribirse al tiempo re-renderizaría el panel en cada frame.
+      start: useEditorStore.getState().playhead,
       duration: DEFAULT_STILL_DURATION,
       text: preset.text,
       transform: preset.transform,

@@ -51,9 +51,12 @@ export function TimelinePanel() {
   const toggleSnapping = useEditorStore((state) => state.toggleSnapping);
   const execute = useEditorStore((state) => state.execute);
   const selectTrack = useEditorStore((state) => state.selectTrack);
-  const playhead = useEditorStore((state) => state.playhead);
+  // Booleano derivado: el panel no se re-renderiza en cada frame de la reproducción.
+  const canEdit = useEditorStore((state) => {
+    const current = selectActiveProject(state);
+    return current ? canEditAtPlayhead(current, state.playhead, state.selection.clipIds) : false;
+  });
   if (!project) return null;
-  const canEdit = canEditAtPlayhead(project, playhead, selectedClipIds);
 
   const addTrack = (type: TrackType) => {
     const command = addTrackCommand(project, type);

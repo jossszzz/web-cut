@@ -26,9 +26,9 @@ import {
 } from "@/core/playback/composition";
 import { IDENTITY_TRANSFORM } from "@/core/project/factory";
 import type { ClipLocation } from "@/core/project/queries";
-import type { AnimatableProperty, Crop, Project, Transform, TransitionType } from "@/core/project/schema";
+import type { AnimatableProperty, Clip, Crop, Project, Transform, TransitionType } from "@/core/project/schema";
 import { resolveMove, resolveTrim } from "@/core/timeline/edit";
-import { formatTimecode, frameToUs, secondsToUs, usToSeconds } from "@/core/types/time";
+import { formatTimecode, frameToUs, secondsToUs, US_PER_SECOND, usToSeconds, type Microseconds } from "@/core/types/time";
 import { useMediaStore } from "@/features/media/store/mediaStore";
 import { CLIP_COLORS } from "@/lib/constants/clipColors";
 
@@ -42,10 +42,31 @@ const MAX_CROP_TOTAL = 0.95;
 /** Proyecto más reciente: durante un arrastre el prop puede ir un render por detrás. */
 const latestProject = (fallback: Project) => selectActiveProject(useEditorStore.getState()) ?? fallback;
 
+/** Durante la reproducción, los valores animados del inspector se refrescan a este ritmo. */
+const PLAYING_REFRESH: Microseconds = US_PER_SECOND / 4;
+
+/**
+ * Tiempo del cursor con la resolución justa para el inspector, para no
+ * re-renderizarlo en cada frame de la reproducción:
+ * - clip sin keyframes: solo importa si el cursor está dentro (devuelve su inicio) o fuera (-1);
+ * - con keyframes: el tiempo exacto en pausa y ~4 veces/s mientras se reproduce.
+ * Las ediciones leen el tiempo real en el momento de aplicarse (`editTimeNow`).
+ */
+export function inspectorPlayhead(clip: Clip, playhead: Microseconds, isPlaying: boolean): Microseconds {
+  if (keyframeTimes(clip).length === 0) {
+    return playhead >= clip.start && playhead <= clip.start + clip.duration ? clip.start : -1;
+  }
+  return isPlaying ? Math.floor(playhead / PLAYING_REFRESH) * PLAYING_REFRESH : playhead;
+}
+
+function useInspectorPlayhead(clip: Clip): Microseconds {
+  return useEditorStore((state) => inspectorPlayhead(clip, state.playhead, state.isPlaying));
+}
+
 export function ClipInspector({ project, location }: { project: Project; location: ClipLocation }) {
   const execute = useEditorStore((state) => state.execute);
   const sealHistory = useEditorStore((state) => state.sealHistory);
-  const playhead = useEditorStore((state) => state.playhead);
+  const playhead = useInspectorPlayhead(location.clip);
   const setPlayhead = useEditorStore((state) => state.setPlayhead);
   const { clip, track } = location;
   const { fps } = project.settings;
@@ -55,7 +76,11 @@ export function ClipInspector({ project, location }: { project: Project; locatio
   const tolerance = Math.round(frameToUs(1, fps) / 2);
   const inside = playhead >= clip.start && playhead <= clip.start + clip.duration;
   const local = Math.min(Math.max(0, playhead - clip.start), clip.duration);
-  const editTime = clip.start + local;
+  /** Instante real del cursor dentro del clip, leído al aplicar una edición. */
+  const editTimeNow = () => {
+    const now = useEditorStore.getState().playhead;
+    return clip.start + Math.min(Math.max(0, now - clip.start), clip.duration);
+  };
   const t = evaluateTransform(clip, local);
 
   const isVisual = clip.type !== "audio";
@@ -68,7 +93,7 @@ export function ClipInspector({ project, location }: { project: Project; locatio
 
   const transform = (values: Partial<Transform>, label: string, field?: string) =>
     execute(
-      setTransformCommand(latestProject(project), clip.id, values, { time: editTime, tolerance }, {
+      setTransformCommand(latestProject(project), clip.id, values, { time: editTimeNow(), tolerance }, {
         label,
         mergeKey: field ? `${clip.id}:${field}` : undefined,
       }),
@@ -79,7 +104,7 @@ export function ClipInspector({ project, location }: { project: Project; locatio
     atPlayhead: findKeyframeAt(clip.keyframes[properties[0]], local, tolerance) !== -1,
     disabled: !inside || track.locked,
     onToggle: () =>
-      execute(toggleKeyframeCommand(latestProject(project), clip.id, properties, { time: editTime, tolerance })),
+      execute(toggleKeyframeCommand(latestProject(project), clip.id, properties, { time: editTimeNow(), tolerance })),
   });
 
   const times = keyframeTimes(clip);

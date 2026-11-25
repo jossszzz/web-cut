@@ -361,6 +361,20 @@ describe("PlaybackEngine", () => {
     expect(env.h.log.frames).toBe(before + 1);
   });
 
+  it("a 120 Hz solo publica el tiempo una vez por frame del proyecto", async () => {
+    env.engine.start();
+    await flush();
+    env.p.elements.forEach((el) => el.settle());
+    let updates = 0;
+    env.h.host.subscribe((next, prev) => {
+      if (next.playhead !== prev.playhead) updates++;
+    });
+    env.h.set({ isPlaying: true });
+    for (let i = 0; i < 120; i++) await env.p.runFrame(1000 / 120); // 1 s de pantalla a 120 Hz
+    expect(updates).toBeGreaterThanOrEqual(29);
+    expect(updates).toBeLessThanOrEqual(31); // proyecto a 30 fps
+  });
+
   it("libera elementos de clips eliminados y su fuente", async () => {
     env.engine.start();
     await flush();

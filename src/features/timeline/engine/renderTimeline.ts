@@ -22,7 +22,6 @@ export interface TimelineRenderState {
   assets: Readonly<Record<string, MediaAsset>>;
   /** Miniatura pequeña del asset para las teselas del clip. */
   getThumbnail: (asset: MediaAsset) => CanvasImageSource | null;
-  playhead: number;
   viewport: TimelineViewport;
   layout: TimelineLayout;
   width: number;
@@ -241,27 +240,39 @@ function drawTracks(ctx: CanvasRenderingContext2D, state: TimelineRenderState): 
   });
 }
 
-function drawPlayhead(ctx: CanvasRenderingContext2D, state: TimelineRenderState): void {
+function drawProjectEnd(ctx: CanvasRenderingContext2D, state: TimelineRenderState): void {
   const { viewport, layout, height, project } = state;
-
   const endX = Math.round(timeToX(getProjectDuration(project), viewport)) + 0.5;
-  if (endX > 0) {
-    ctx.strokeStyle = COLORS.projectEnd;
-    ctx.setLineDash([3, 3]);
-    ctx.beginPath();
-    ctx.moveTo(endX, layout.rulerHeight);
-    ctx.lineTo(endX, height);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
+  if (endX <= 0) return;
+  ctx.strokeStyle = COLORS.projectEnd;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(endX, layout.rulerHeight);
+  ctx.lineTo(endX, height);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
 
-  const x = Math.round(timeToX(state.playhead, viewport)) + 0.5;
+export interface PlayheadRenderState {
+  playhead: number;
+  viewport: TimelineViewport;
+  width: number;
+  height: number;
+}
+
+/**
+ * Cursor de reproducción. Va en un canvas superpuesto: durante la
+ * reproducción solo se repinta esta línea, no clips, miniaturas ni regla.
+ */
+export function renderPlayhead(ctx: CanvasRenderingContext2D, state: PlayheadRenderState): void {
+  ctx.clearRect(0, 0, state.width, state.height);
+  const x = Math.round(timeToX(state.playhead, state.viewport)) + 0.5;
   if (x < -6 || x > state.width + 6) return;
   ctx.strokeStyle = COLORS.playhead;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(x, 0);
-  ctx.lineTo(x, height);
+  ctx.lineTo(x, state.height);
   ctx.stroke();
   ctx.fillStyle = COLORS.playhead;
   ctx.beginPath();
@@ -294,7 +305,7 @@ function drawOverlays(ctx: CanvasRenderingContext2D, state: TimelineRenderState)
   }
 }
 
-/** Dibuja el timeline completo. Función pura respecto al estado recibido. */
+/** Dibuja el timeline (sin el cursor, ver `renderPlayhead`). Función pura respecto al estado recibido. */
 export function renderTimeline(ctx: CanvasRenderingContext2D, state: TimelineRenderState): void {
   ctx.clearRect(0, 0, state.width, state.height);
   ctx.fillStyle = COLORS.background;
@@ -302,5 +313,5 @@ export function renderTimeline(ctx: CanvasRenderingContext2D, state: TimelineRen
   drawTracks(ctx, state);
   drawRuler(ctx, state);
   drawOverlays(ctx, state);
-  drawPlayhead(ctx, state);
+  drawProjectEnd(ctx, state);
 }

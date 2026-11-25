@@ -152,3 +152,24 @@ test("el heap no crece tras varios ciclos de edición y exportación", async ({ 
   console.log(`Heap tras GC: ${baseline.toFixed(1)} MB → ${after.toFixed(1)} MB`);
   expect(after - baseline).toBeLessThan(8);
 });
+
+test("durante la reproducción el timeline no se repinta entero en cada frame", async ({ page }) => {
+  await page.goto("/projects");
+  await page.getByLabel("Nombre").fill("Rendimiento");
+  await page.getByText("Demostración", { exact: true }).click();
+  await page.getByRole("button", { name: "Crear proyecto" }).click();
+  await expect(page.getByRole("heading", { name: "Rendimiento", level: 1 })).toBeVisible();
+
+  const timeline = page.getByTestId("timeline-canvas");
+  await page.waitForTimeout(500);
+  const before = Number(await timeline.getAttribute("data-draws"));
+  await page.getByRole("button", { name: "Reproducir" }).click();
+  await page.waitForTimeout(1500);
+  await page.getByRole("button", { name: "Pausar" }).click();
+  const after = Number(await timeline.getAttribute("data-draws"));
+  // ~45 frames reproducidos; antes del cambio el timeline completo se repintaba en cada uno.
+  expect(after - before).toBeLessThanOrEqual(3);
+  await expect(page.getByRole("status", { name: "Tiempo actual" }).or(page.locator("output[aria-label='Tiempo actual']"))).not.toContainText(
+    "00:00:00:00 /",
+  );
+});
