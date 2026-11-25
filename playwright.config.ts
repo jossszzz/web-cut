@@ -11,7 +11,8 @@ export default defineConfig({
   // ejecuta en GitHub Actions (.github/workflows/ci.yml).
   workers: 2,
   retries: process.env.CI ? 2 : 0,
-  reporter: "list",
+  // En CI, los fallos se publican además como anotaciones de GitHub (visibles sin descargar logs).
+  reporter: process.env.CI ? [["github"], ["list"]] : "list",
   use: {
     baseURL: `http://localhost:${PORT}`,
     viewport: { width: 1440, height: 900 },
