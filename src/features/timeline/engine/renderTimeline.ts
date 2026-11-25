@@ -20,7 +20,8 @@ export interface TimelineRenderState {
   selectedTrackId: string | null;
   selectedClipIds: ReadonlySet<string>;
   assets: Readonly<Record<string, MediaAsset>>;
-  getFrameSource: (asset: MediaAsset) => CanvasImageSource | null;
+  /** Miniatura pequeña del asset para las teselas del clip. */
+  getThumbnail: (asset: MediaAsset) => CanvasImageSource | null;
   playhead: number;
   viewport: TimelineViewport;
   layout: TimelineLayout;
@@ -115,7 +116,7 @@ function drawThumbnails(
 ): void {
   const asset = clip.assetId ? state.assets[clip.assetId] : undefined;
   if (!asset || asset.kind === "audio") return;
-  const source = state.getFrameSource(asset);
+  const source = state.getThumbnail(asset);
   if (!source || !asset.width || !asset.height) return;
   const tileW = Math.max(16, (box.h * asset.width) / asset.height);
   ctx.save();

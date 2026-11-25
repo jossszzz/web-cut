@@ -117,15 +117,17 @@ export async function runExport(job: ExportJob, control: ExportControl): Promise
     }
 
     // Destino: archivo en OPFS (no ocupa RAM) o buffer en memoria.
-    let target: Target;
+    // Si OPFS falla (p. ej. WebKit en navegación privada), se usa la memoria.
     if (job.streamToDisk) {
-      disk = await openDiskFile(`${job.id}.mp4`);
-      target = new StreamTarget(disk.writable, { chunked: true });
-    } else {
-      target = new BufferTarget();
+      try {
+        disk = await openDiskFile(`${job.id}.mp4`);
+      } catch (error) {
+        console.info("[WebCut] No se pudo escribir en disco (OPFS); se exporta en memoria.", error);
+      }
     }
+    const target: Target = disk ? new StreamTarget(disk.writable, { chunked: true }) : new BufferTarget();
     output = new Output({
-      format: new Mp4OutputFormat({ fastStart: job.streamToDisk ? false : "in-memory" }),
+      format: new Mp4OutputFormat({ fastStart: disk ? false : "in-memory" }),
       target,
     });
 

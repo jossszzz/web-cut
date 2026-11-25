@@ -4,7 +4,14 @@ import type { MediaAsset, Project } from "@/core/project/schema";
 
 export interface BlobRecord {
   id: string;
-  blob: Blob;
+  /** El archivo tal cual (lo normal). */
+  blob?: Blob;
+  /**
+   * Respaldo para navegadores que no guardan `Blob` en IndexedDB (WebKit en
+   * sesiones efímeras o navegación privada): el contenido como `ArrayBuffer`.
+   */
+  data?: ArrayBuffer;
+  type?: string;
   size: number;
   createdAt: number;
 }

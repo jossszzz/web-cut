@@ -12,7 +12,9 @@ const PX_PER_S = 80;
 async function createProject(page: Page, name: string, demo = false) {
   await page.goto("/projects");
   await page.getByLabel("Nombre").fill(name);
+  await expect(page.getByLabel("Nombre")).toHaveValue(name);
   if (demo) await page.getByText("Demostración", { exact: true }).click();
+  await expect(page.getByLabel("Nombre")).toHaveValue(name);
   await page.getByRole("button", { name: "Crear proyecto" }).click();
   await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
 }

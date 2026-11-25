@@ -1,11 +1,21 @@
 "use client";
 
-import { AlertCircle, Clapperboard, Film, HardDrive, LayoutTemplate, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  Clapperboard,
+  Film,
+  HardDrive,
+  LayoutTemplate,
+  Loader2,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { cn } from "cn";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
+import { BrowserSupportNotice } from "@/components/shared/BrowserSupportNotice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,11 +25,17 @@ import type { Project } from "@/core/project/schema";
 import { formatDuration } from "@/core/types/time";
 import { useEditorStore, type ProjectTemplate } from "@/features/editor/store/editorStore";
 import { estimateStorage, type StorageEstimate } from "@/infrastructure/browser/storageQuota";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { createProject, deleteProject, loadAllProjects } from "../persistence/projectPersistence";
 
 const TEMPLATES: ReadonlyArray<{ id: ProjectTemplate; title: string; body: string; icon: typeof Film }> = [
-  { id: "empty", title: "Proyecto vacío", body: "1920 × 1080 · 30 fps, con pistas por defecto.", icon: LayoutTemplate },
+  {
+    id: "empty",
+    title: "Proyecto vacío",
+    body: "1920 × 1080 · 30 fps, con pistas por defecto.",
+    icon: LayoutTemplate,
+  },
   { id: "demo", title: "Demostración", body: "Incluye clips de prueba para explorar el editor.", icon: Film },
 ];
 
@@ -55,6 +71,7 @@ export function ProjectsScreen() {
   const router = useRouter();
   const projects = useEditorStore((state) => state.projects);
   const loaded = useEditorStore((state) => state.projectsLoaded);
+  const hydrated = useHydrated();
   const [name, setName] = useState("");
   const [template, setTemplate] = useState<ProjectTemplate>("empty");
   const [creating, setCreating] = useState(false);
@@ -82,7 +99,8 @@ export function ProjectsScreen() {
   };
 
   const onDelete = async (project: Project) => {
-    if (!window.confirm(`¿Eliminar "${project.name}" y todos sus medios? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(`¿Eliminar "${project.name}" y todos sus medios? Esta acción no se puede deshacer.`))
+      return;
     try {
       await deleteProject(project.id);
       estimateStorage().then(setEstimate);
@@ -104,9 +122,15 @@ export function ProjectsScreen() {
       <p className="mt-1 text-sm text-muted-foreground">
         Los proyectos y medios se guardan en este navegador (IndexedDB). No se suben a ningún servidor.
       </p>
+      <div className="mt-4 empty:hidden">
+        <BrowserSupportNotice />
+      </div>
 
       {error && (
-        <p role="alert" className="mt-4 flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p
+          role="alert"
+          className="mt-4 flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
           <AlertCircle className="size-4 shrink-0" aria-hidden />
           {error}
         </p>
@@ -121,6 +145,7 @@ export function ProjectsScreen() {
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Proyecto sin título"
+            disabled={!hydrated}
             maxLength={80}
             className="max-w-sm"
           />
@@ -133,7 +158,9 @@ export function ProjectsScreen() {
                 key={id}
                 className={cn(
                   "flex cursor-pointer gap-3 rounded-lg border p-4 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
-                  template === id ? "border-primary bg-primary/5" : "border-border hover:border-foreground/20",
+                  template === id
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-foreground/20",
                 )}
               >
                 <input
@@ -141,6 +168,7 @@ export function ProjectsScreen() {
                   name="template"
                   value={id}
                   checked={template === id}
+                  disabled={!hydrated}
                   onChange={() => setTemplate(id)}
                   className="sr-only"
                 />
@@ -153,8 +181,12 @@ export function ProjectsScreen() {
             ))}
           </div>
         </fieldset>
-        <Button type="submit" className="mt-5" disabled={creating}>
-          {creating ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Plus data-icon="inline-start" />}
+        <Button type="submit" className="mt-5" disabled={creating || !hydrated}>
+          {creating ? (
+            <Loader2 data-icon="inline-start" className="animate-spin" />
+          ) : (
+            <Plus data-icon="inline-start" />
+          )}
           Crear proyecto
         </Button>
       </form>
@@ -174,8 +206,14 @@ export function ProjectsScreen() {
         ) : (
           <ul className="mt-3 divide-y divide-border rounded-xl border border-border">
             {list.map((project) => (
-              <li key={project.id} className="flex items-center gap-2 pr-2 transition-colors hover:bg-accent/50">
-                <Link href={`/editor/${project.id}`} className="flex min-w-0 flex-1 items-center justify-between gap-4 px-4 py-3">
+              <li
+                key={project.id}
+                className="flex items-center gap-2 pr-2 transition-colors hover:bg-accent/50"
+              >
+                <Link
+                  href={`/editor/${project.id}`}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-4 px-4 py-3"
+                >
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">{project.name}</span>
                     <span className="block text-xs text-muted-foreground">
@@ -183,7 +221,8 @@ export function ProjectsScreen() {
                     </span>
                   </span>
                   <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                    {project.settings.width} × {project.settings.height} · {formatDuration(getProjectDuration(project))}
+                    {project.settings.width} × {project.settings.height} ·{" "}
+                    {formatDuration(getProjectDuration(project))}
                   </span>
                 </Link>
                 <button

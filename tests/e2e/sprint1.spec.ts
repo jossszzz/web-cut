@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function createProject(page: Page, name: string, template: "Proyecto vacío" | "Demostración") {
   await page.goto("/");
-  await page.getByRole("link", { name: "Abrir el editor" }).click();
+  await page.getByRole("link", { name: "Abrir el editor" }).first().click();
   await expect(page.getByRole("heading", { name: "Proyectos", level: 1 })).toBeVisible();
   await page.getByLabel("Nombre").fill(name);
   await page.getByText(template, { exact: true }).click();

@@ -3,7 +3,9 @@
 Editor de video web, **local-first** y **browser-based**. La especificación completa está en
 [`docs/arquitectura-roadmap.md`](docs/arquitectura-roadmap.md).
 
-> Estado: **Fase 6** completada (exportación MP4). Pendiente: optimización y lanzamiento (Fase 7).
+> Estado: **v0.1.0 — MVP** (Fases 1–7 completadas). Guía de usuario:
+> [`docs/guia-de-usuario.md`](docs/guia-de-usuario.md) · Despliegue: [`docs/despliegue.md`](docs/despliegue.md) ·
+> Cambios: [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Requisitos
 
@@ -21,8 +23,35 @@ pnpm lint
 pnpm typecheck
 pnpm test             # pruebas unitarias (Vitest)
 pnpm exec playwright install chromium   # solo la primera vez
-pnpm test:e2e         # pruebas E2E (Playwright, compila y arranca la app)
+pnpm test:e2e         # pruebas E2E (Playwright, compila y arranca la app) — pesado
+pnpm exec playwright test --project=chromium tests/e2e/phase6.spec.ts   # un solo archivo/navegador
 ```
+
+La suite E2E completa (Chromium, WebKit y Firefox) se ejecuta en GitHub Actions en cada push
+(`.github/workflows/ci.yml`). En local conviene lanzar solo lo que se esté tocando: exportar video es
+intensivo para la CPU.
+
+## Fase 7: optimización y lanzamiento
+
+- **Memoria**: las imágenes de la preview tienen un presupuesto (≈ 48 MP); al superarlo se liberan las
+  menos usadas (LRU) y se recargan al necesitarlas. Al salir del editor se liberan bitmaps, object URLs,
+  el archivo exportado (memoria y OPFS) y los workers; el worker de medios se cierra tras 30 s sin uso.
+- **Pruebas de memoria** (`tests/e2e/phase7-memory.spec.ts`): un script contabiliza object URLs, workers,
+  `ImageBitmap` y elementos multimedia vivos y comprueba que vuelven a cero al salir del editor (encontró y
+  se corrigió una fuga del archivo exportado). En Chromium se mide además el heap tras forzar el GC a lo
+  largo de varios ciclos de edición y exportación (+1,4 MB en 3 ciclos).
+- **Miniaturas**: el timeline usa bitmaps pequeños (96 px de alto) en lugar de la imagen original (hasta
+  4K); las miniaturas de imágenes se guardan en WebP (con transparencia) cuando el navegador lo admite; las
+  tarjetas de la biblioteca cargan sus imágenes en diferido.
+- **Carga diferida**: Mediabunny solo se carga en los workers; el contenido del diálogo de exportación y los
+  paneles de Texto y Transiciones se descargan al abrirlos.
+- **Navegadores**: suite E2E en Chromium (Chrome/Edge) y WebKit (Safari). Arreglos para WebKit: respaldo
+  `ArrayBuffer` cuando IndexedDB no acepta `Blob` (Safari en navegación privada), exportación en memoria si
+  OPFS falla y formularios deshabilitados hasta la hidratación (antes se podía perder lo escrito). Aviso en
+  *Proyectos* si al navegador le faltan APIs para editar o exportar.
+- **Landing page** con funciones, privacidad y compatibilidad; metadatos Open Graph, `robots.txt`,
+  `sitemap.xml` y `noindex` en las páginas privadas; cabeceras de seguridad básicas.
+- **Documentación** de usuario y de despliegue, CI en GitHub Actions y `CHANGELOG.md`.
 
 ## Fase 6: exportación MP4
 
@@ -165,8 +194,9 @@ src/
 │   ├── export/              Diálogo, servicio, store y motor de exportación (worker)
 │   ├── media/               Importación, biblioteca, store de assets
 │   ├── projects/            Lista de proyectos y persistencia (autoguardado)
-│   ├── text/
-└── lib/                 Utilidades de canvas, hooks, constantes
+│   ├── text/                Panel de textos
+│   └── transitions/         Panel de transiciones
+└── lib/                 Canvas, hooks, caché LRU, detección de compatibilidad, constantes
 tests/
 ├── unit/                Vitest (core + store)
 └── e2e/                 Playwright (criterios de aceptación)
@@ -191,5 +221,14 @@ ediciones pasan por comandos; los renderizadores de canvas son funciones indepen
   - El tamaño estimado es un máximo orientativo; con contenido sencillo el archivo es menor.
   - Si el codificador elegido no es H.264, algunos reproductores (p. ej. QuickTime) podrían no
     abrir el archivo.
-  - Las pruebas automáticas cubren Chromium; Firefox (sin `AudioEncoder` AAC) y Safari quedan para
-    la Fase 7.
+  - Si OPFS no está disponible (p. ej. Safari en navegación privada), el archivo se genera en memoria.
+  - Turbopack evalúa Mediabunny dos veces dentro de los workers (aviso "Mediabunny was loaded twice" en
+    la consola); no afecta al resultado, que verifican las pruebas.
+- Navegadores:
+  - Verificados con pruebas automáticas: Chromium (equivale a Chrome y Edge) y WebKit (motor de Safari;
+    no es Safari real). Firefox no se ha podido ejecutar en local (la build de Playwright no arranca en
+    macOS 27); corre en CI sin bloquear hasta verificarlo.
+  - En Safari en navegación privada, los medios importados se guardan como `ArrayBuffer`: ocupan memoria
+    al importarlos, así que los archivos muy grandes pueden fallar.
+  - La interfaz del editor necesita al menos 1024 px de ancho; no está adaptada a móviles.
+- No hay modo sin conexión (service worker) ni copias de seguridad/exportación del proyecto.

@@ -14,7 +14,7 @@ import { usToSeconds } from "@/core/types/time";
 import { selectActiveProject, useEditorStore } from "@/features/editor/store/editorStore";
 import { addAssetToTimeline, ASSET_DRAG_TYPE } from "@/features/media/actions";
 import { useMediaStore } from "@/features/media/store/mediaStore";
-import { getFrameSource, useFrameSourcesVersion } from "@/features/preview/renderer/frameSources";
+import { getThumbnailSource, useFrameSourcesVersion } from "@/features/preview/renderer/frameSources";
 import { prepareCanvas } from "@/lib/canvas";
 import { useElementSize } from "@/lib/hooks/useElementSize";
 
@@ -61,7 +61,7 @@ export function TimelineCanvas() {
       selectedTrackId: selection.trackId,
       selectedClipIds,
       assets,
-      getFrameSource,
+      getThumbnail: getThumbnailSource,
       playhead,
       viewport,
       layout,

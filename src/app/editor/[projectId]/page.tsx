@@ -3,7 +3,7 @@ import { Suspense } from "react";
 
 import { EditorWorkspace } from "@/features/editor/components/EditorWorkspace";
 
-export const metadata: Metadata = { title: "Editor" };
+export const metadata: Metadata = { title: "Editor", robots: { index: false } };
 
 export default function EditorPage({ params }: PageProps<"/editor/[projectId]">) {
   return (

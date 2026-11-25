@@ -56,8 +56,9 @@ async function probeImage(file: Blob): Promise<ProbeResult> {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Sin contexto 2D");
     ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    // PNG conserva la transparencia de la imagen original.
-    const thumbnail = await canvas.convertToBlob({ type: "image/png" });
+    // WebP conserva la transparencia y ocupa mucho menos que PNG; los
+    // navegadores que no lo codifican devuelven PNG.
+    const thumbnail = await canvas.convertToBlob({ type: "image/webp", quality: 0.82 });
     return { width, height, hasAudio: false, thumbnail };
   } finally {
     bitmap.close();

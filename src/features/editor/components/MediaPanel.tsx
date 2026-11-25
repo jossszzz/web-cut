@@ -1,11 +1,18 @@
 "use client";
 
-import { TextPanel } from "@/features/text/components/TextPanel";
+import dynamic from "next/dynamic";
+
 import { MediaLibrary } from "@/features/media/components/MediaLibrary";
-import { TransitionsPanel } from "@/features/transitions/components/TransitionsPanel";
 
 import { useEditorStore, type EditorTool } from "../store/editorStore";
 import { EDITOR_TOOLS } from "./EditorSidebar";
+
+// Paneles secundarios: se cargan la primera vez que se abren.
+const TextPanel = dynamic(() => import("@/features/text/components/TextPanel").then((m) => m.TextPanel), { ssr: false });
+const TransitionsPanel = dynamic(
+  () => import("@/features/transitions/components/TransitionsPanel").then((m) => m.TransitionsPanel),
+  { ssr: false },
+);
 
 const COMING_SOON: Partial<Record<EditorTool, string>> = {
   audio: "Importa música y sonidos desde Medios. El volumen y la velocidad de cada clip se ajustan en el inspector.",

@@ -88,6 +88,26 @@ describe("LocalAssetStorage y LocalMediaAssetRepository", () => {
     expect(await repos.blobs.get(id)).toBeNull();
   });
 
+  it("si IndexedDB rechaza Blob (Safari privado), guarda el contenido como ArrayBuffer", async () => {
+    const original = db.blobs.add.bind(db.blobs);
+    let rejected = 0;
+    db.blobs.add = ((record: Parameters<typeof original>[0]) => {
+      if (record.blob) {
+        rejected++;
+        return Promise.reject(new DOMException("Error preparing Blob data", "UnknownError"));
+      }
+      return original(record);
+    }) as typeof db.blobs.add;
+
+    const first = await repos.blobs.save(new Blob(["uno"], { type: "text/plain" }));
+    const second = await repos.blobs.save(new Blob(["dos"]));
+    expect(rejected).toBe(1); // no lo reintenta con cada archivo
+    const blob = await repos.blobs.get(first);
+    expect(blob?.type).toBe("text/plain");
+    expect(await blob?.text()).toBe("uno");
+    expect(await (await repos.blobs.get(second))?.text()).toBe("dos");
+  });
+
   it("lista assets por proyecto y al eliminarlos borra sus binarios", async () => {
     const blobId = await repos.blobs.save(new Blob(["x"]));
     const asset = assetFor("p1", blobId);

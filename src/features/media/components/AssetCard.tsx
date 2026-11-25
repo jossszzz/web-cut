@@ -51,7 +51,7 @@ export function AssetCard({ asset, onError }: { asset: MediaAsset; onError: (mes
         <div className="relative aspect-video bg-canvas">
           {url ? (
             // eslint-disable-next-line @next/next/no-img-element -- object URL local, next/image no aplica
-            <img src={url} alt="" draggable={false} className="size-full object-cover" />
+            <img src={url} alt="" draggable={false} loading="lazy" decoding="async" className="size-full object-cover" />
           ) : (
             <div className="grid size-full place-items-center">
               <Icon className="size-6 text-muted-foreground" aria-hidden />

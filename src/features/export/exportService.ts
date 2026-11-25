@@ -187,6 +187,15 @@ export function downloadExport(): void {
 /** Margen para que una descarga recién iniciada termine de leer el archivo. */
 const RELEASE_DELAY_MS = 30_000;
 let releaseTimer: ReturnType<typeof setTimeout> | null = null;
+/** URL del resultado anterior pendiente de revocar. */
+let pendingUrl: string | null = null;
+
+function flushPendingRelease(): void {
+  if (releaseTimer) clearTimeout(releaseTimer);
+  releaseTimer = null;
+  if (pendingUrl) URL.revokeObjectURL(pendingUrl);
+  pendingUrl = null;
+}
 
 /** Vuelve al formulario y libera el archivo anterior (memoria y OPFS) poco después. */
 export function resetExport(): void {
@@ -195,10 +204,26 @@ export function resetExport(): void {
   resultUrl = null;
   useExportStore.setState(initialExportState);
   if (!url) return;
-  if (releaseTimer) clearTimeout(releaseTimer);
+  flushPendingRelease();
+  pendingUrl = url;
   releaseTimer = setTimeout(() => {
-    releaseTimer = null;
-    URL.revokeObjectURL(url);
+    flushPendingRelease();
     if (useExportStore.getState().status !== "running") void remote?.clear().catch(() => undefined);
   }, RELEASE_DELAY_MS);
+}
+
+/**
+ * Libera todo lo de la exportación al salir del editor: el archivo exportado
+ * (URL y OPFS) y el worker. Si hay una exportación en curso, sigue adelante.
+ */
+export function releaseExportResources(): void {
+  if (useExportStore.getState().status === "running") return;
+  flushPendingRelease();
+  const api = remote;
+  releaseResult();
+  useExportStore.setState(initialExportState);
+  void api
+    ?.clear()
+    .catch(() => undefined)
+    .finally(terminateWorker);
 }
